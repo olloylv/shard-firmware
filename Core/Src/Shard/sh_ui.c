@@ -137,11 +137,14 @@ uint8_t shui_isUsed(uint16_t parNr)
 //------------------------------------------------------------------------
 void shui_shortName(uint16_t parNr, char* out3)
 {
-	if(parNr == PAR_SH_UPDATE) { memcpy(out3, "Upd", 3); return; }
-	if(parNr == PAR_SH_CPU) { memcpy(out3, "CPU", 3); return; }
+	/* lower case like the LXR names; the menu capitalises the selected one */
+	if(parNr == PAR_SH_UPDATE) { memcpy(out3, "upd", 3); return; }
+	if(parNr == PAR_SH_CPU) { memcpy(out3, "cpu", 3); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) { memcpy(out3, "   ", 3); return; }
 	putText(out3, pi.engine ? pi.engine->shortName : pi.strip->shortName, 3);
+	for(uint8_t i = 0; i < 3; i++)
+		if(out3[i] >= 'A' && out3[i] <= 'Z') out3[i] = (char)(out3[i] + 32);
 }
 
 void shui_editTop(uint16_t parNr, char* row16)

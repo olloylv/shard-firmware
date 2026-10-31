@@ -49,6 +49,19 @@ add_executable(shard_render
   ${DSP}/BufferTools.c
   ${DSP}/dither.c
   ${DSP}/Samples.c
+  # master FX bus (for previewing kits)
+  ${CORE}/Src/Soundengine/FxBus.c
+  ${DSP}/FX/Compressor.c
+  ${DSP}/FX/Delay.c
+  ${DSP}/FX/Distortion.c
+  ${DSP}/FX/FxRamBuffer.c
+  ${DSP}/FX/Reverb.c
+  ${DSP}/TiltEq.c
+  ${DSP}/FX/Ringmod.c
+  ${DSP}/FX/VerbTools/AllpassDelay.c
+  ${DSP}/FX/VerbTools/sinCos.c
+  ${DSP}/FX/VerbTools/VerbDelay.c
+  ${DSP}/FX/VerbTools/VerbModDelay.c
 )
 # stubs first so that "stm32f7xx_hal.h" and "main.h" resolve to the host versions
 target_include_directories(shard_render PRIVATE
@@ -57,7 +70,7 @@ target_include_directories(shard_render PRIVATE
   ${CORE}/ThirdParty
   ${CORE}/Src/Shard/engines
 )
-target_compile_definitions(shard_render PRIVATE SHARD_HOST=1 TEST=1)
+target_compile_definitions(shard_render PRIVATE SHARD_HOST=1 TEST=1 __fp16=_Float16)
 target_compile_options(shard_render PRIVATE
   $<$<COMPILE_LANGUAGE:C>:-Wno-unused-parameter -Wno-int-conversion -Wno-incompatible-pointer-types>
   $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -Wall>

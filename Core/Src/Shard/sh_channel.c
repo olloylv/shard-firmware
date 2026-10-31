@@ -156,10 +156,10 @@ void sh_channelDefaults(uint8_t* b, uint8_t engine)
 	b[SHP_TUNE]       = 60;
 	b[SHP_FINE]       = 64;
 	b[SHP_ATTACK]     = 0;
-	b[SHP_DECAY]      = 50;
+	b[SHP_DECAY]      = 30;
 	b[SHP_SLOPE]      = 30;
 	b[SHP_REPEAT]     = 0;
-	b[SHP_DECAY_ALT]  = 90;
+	b[SHP_DECAY_ALT]  = 45;
 	b[SHP_VELVOL]     = 1;
 	b[SHP_AEG_MODE]   = SH_AEG_AD;
 	b[SHP_FILT_FREQ]  = 127;

@@ -373,7 +373,7 @@ const ShEngineInfo kInfoGnd = {
     SH_BI("Swp", "Sweep", 64),
     SH_UNI("SwD", "SweepDec", 40),
   },
-  { 48, SH_AEG_AD, 0, 50, 0, 127 },
+  { 48, SH_AEG_AD, 0, 20, 0, 127 },
 };
 
 SH_DEFINE_ENGINE_FACTORY(TrxBD)

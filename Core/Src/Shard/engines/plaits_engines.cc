@@ -218,7 +218,7 @@ class PlaitsString : public Engine {
                   in.p[0], in.p[1] * in.p[1], in.p[2], temp_, out, aux_, kBlock);
     const float exc = in.p[3];
     for (size_t i = 0; i < kBlock; ++i) out[i] += exc * aux_[i];
-    SoftLimit(out, 1.0f);
+    SoftLimit(out, 2.0f);
   }
  private:
   plaits::StringVoice voice_;
@@ -286,7 +286,7 @@ const ShEngineInfo kInfoPlaitsParticle = {
     SH_UNI("Res", "Reso/Dif", 64),
     SH_UNI("Spr", "Spread", 40),
   },
-  { 72, SH_AEG_AD, 0, 50, 0, 127 },
+  { 72, SH_AEG_AD, 0, 25, 0, 127 },
 };
 
 SH_DEFINE_ENGINE_FACTORY(PlaitsAnalogBD)

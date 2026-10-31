@@ -236,8 +236,8 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 				float frac1 = (input1&0b0000000111111111) / 512.f;
 				float frac2 = (input2&0b0000000111111111) / 512.f;
 
-				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1;
-				double val2 = ecc83Table[itg2] + (ecc83Table[itg2+1]-ecc83Table[itg2]) * frac2;
+				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1 - ecc83Table[64]; //SHARD: remove the DC offset of the tube curve at zero input
+				double val2 = ecc83Table[itg2] + (ecc83Table[itg2+1]-ecc83Table[itg2]) * frac2 - ecc83Table[64];
 
 
 
@@ -272,7 +272,7 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 				int32_t input1 = ((int32_t)((fxBuffer[idx1]) * (1.f + dist->drive)));
 				uint8_t itg1 = (__SSAT(input1,16)>>9)+64;
 				float frac1 = (input1&0b0000000111111111) / 512.f;
-				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1;
+				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1 - ecc83Table[64]; //SHARD: remove the DC offset of the tube curve at zero input
 
 
 				//--- tone control ---

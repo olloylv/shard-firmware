@@ -184,7 +184,7 @@ const ShEngineInfo kInfoLxrDrum = {
     SH_UNI("TrV", "TransVol", 0),
     SH_UNI("TrF", "TransFrq", 26),
   },
-  { 36, SH_AEG_AD, 0, 60, 0, 127 },
+  { 36, SH_AEG_AD, 0, 32, 0, 127 },
 };
 
 // --- LXR Snare: oscillator + filtered noise ---------------------------------
@@ -287,7 +287,7 @@ const ShEngineInfo kInfoLxrSnare = {
     SH_UNI("TrV", "TransVol", 0),
     SH_UNI("TrF", "TransFrq", 26),
   },
-  { 52, SH_AEG_AD, 0, 50, 0, 127 },
+  { 52, SH_AEG_AD, 0, 22, 0, 127 },
 };
 
 // --- LXR Cymbal / HiHat: three oscillator FM cluster -------------------------
@@ -302,6 +302,7 @@ class LxrMetal : public Engine {
     InitOsc(&osc_, SINE);
     InitOsc(&mod1_, SINE);
     InitOsc(&mod2_, SINE);
+    osc_.fmMod = 1.0f;   // as CymbalVoice.c / HiHat.c: the carrier is fully FM modulated
     SnapEg_init(&snap_);
     transient_init(&trans_);
   }
@@ -378,13 +379,13 @@ class LxrHat : public LxrMetal {};
 const ShEngineInfo kInfoLxrCymbal = {
   "Cym", "LXR Cym", "LXR",
   { LXR_METAL_PARAMS(3, 0) },
-  { 72, SH_AEG_AD, 0, 90, 0, 127 },
+  { 72, SH_AEG_AD, 0, 62, 0, 127 },
 };
 
 const ShEngineInfo kInfoLxrHat = {
   "Hat", "LXR Hat", "LXR",
   { LXR_METAL_PARAMS(3, 3) },
-  { 84, SH_AEG_AD, 0, 30, 0, 127 },
+  { 84, SH_AEG_AD, 0, 8, 0, 127 },
 };
 #undef LXR_METAL_PARAMS
 

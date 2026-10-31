@@ -200,7 +200,7 @@ const ShEngineInfo kInfoByte = {
     SH_UNI("B", "Param B", 60),
     SH_ONOFF("Rst", "Reset", 1),
   },
-  { 60, SH_AEG_AD, 0, 40, 0, 127 },
+  { 60, SH_AEG_AD, 0, 25, 0, 127 },
 };
 
 // --- RING: six oscillators, ring modulated in pairs, band passed --------------
@@ -255,7 +255,7 @@ const ShEngineInfo kInfoRing = {
     SH_UNI("Res", "Reso", 30),
     SH_LIST("Wav", "Waveform", 0, 2, kRingWaves),
   },
-  { 60, SH_AEG_AD, 0, 30, 0, 127 },
+  { 60, SH_AEG_AD, 0, 22, 0, 127 },
 };
 
 // --- COMB: exciter into two tuned comb filters with feedback ------------------
@@ -343,7 +343,7 @@ const ShEngineInfo kInfoComb = {
     SH_UNI("Rat", "Ratio2", 40),
     SH_UNI("Mx2", "Comb2Mix", 50),
   },
-  { 48, SH_AEG_AD, 0, 100, 0, 127 },
+  { 48, SH_AEG_AD, 0, 45, 0, 127 },
 };
 
 SH_DEFINE_ENGINE_FACTORY(Zap)

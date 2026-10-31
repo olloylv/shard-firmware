@@ -21,6 +21,10 @@
 extern "C" {
 #include "Shard/sh_channel.h"
 #include "Shard/sh_engine.h"
+#include "Parameters.h"
+#include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/mixer.h"
+
 }
 
 namespace {
@@ -103,6 +107,194 @@ void SilenceAll() {
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// kit files: --dump (engine/param tables as JSON) and --kit (render a kit)
+// ---------------------------------------------------------------------------
+void DumpJson(const char* path) {
+  FILE* f = fopen(path, "w");
+  auto str = [&](const char* t, int n) {
+    fputc('"', f);
+    for (int i = 0; i < n && t[i]; ++i) fputc(t[i] == '"' ? '\'' : t[i], f);
+    fputc('"', f);
+  };
+  fprintf(f, "{\"par_ch_base\": %d, \"stride\": %d, \"end_of_sound\": %d, \"num_params\": %d,\n",
+          PAR_CH_BASE, SH_CH_STRIDE, END_OF_SOUND_PARAMETERS, NUM_PARAMS);
+  fprintf(f, " \"par\": {\"FX_TYPE\": %d, \"FX_ROUTING\": %d, \"FX_DRY_WET\": %d, \"FX_DIST_TYPE\": %d, "
+             "\"FX_P1\": %d, \"FX_RATIO\": %d, \"FX_WAVE\": %d, \"FX_DELAY_TYPE\": %d, \"MORPH_KIT_DEST\": %d, "
+             "\"CV_DEST_1\": %d, \"CV_MOD_AMT_1\": %d, \"CV_SRC_1\": %d},\n",
+          PAR_FX_TYPE, PAR_FX_ROUTING, PAR_FX_DRY_WET, PAR_FX_DIST_TYPE, PAR_FX_P1, PAR_FX_RATIO, PAR_FX_WAVE,
+          PAR_FX_DELAY_TYPE, PAR_MORPH_KIT_DEST, PAR_CV_DEST_1, PAR_CV_MOD_AMT_1, PAR_CV_SRC_1);
+  fprintf(f, " \"local\": {\"ENGINE\": %d, \"TUNE\": %d, \"FINE\": %d, \"E0\": %d, \"ATTACK\": %d, \"DECAY\": %d, "
+             "\"SLOPE\": %d, \"REPEAT\": %d, \"DECAY_ALT\": %d, \"VELVOL\": %d, \"AEG_MODE\": %d, \"FILT_FREQ\": %d, "
+             "\"FILT_RESO\": %d, \"FILT_TYPE\": %d, \"FILT_DRIVE\": %d, \"VOL\": %d, \"PAN\": %d, \"SRATE\": %d, "
+             "\"DRIVE\": %d, \"OUT\": %d, \"BITS\": %d, \"LFO_FREQ\": %d, \"LFO_OFFSET\": %d, \"LFO_WAVE\": %d, "
+             "\"LFO_RETRIG\": %d},\n",
+          SHP_ENGINE, SHP_TUNE, SHP_FINE, SHP_E0, SHP_ATTACK, SHP_DECAY, SHP_SLOPE, SHP_REPEAT, SHP_DECAY_ALT,
+          SHP_VELVOL, SHP_AEG_MODE, SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_TYPE, SHP_FILT_DRIVE, SHP_VOL, SHP_PAN,
+          SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG);
+  fprintf(f, " \"mod_targets_per_ch\": %d, \"mod_target_local\": [", SH_MOD_TARGETS_PER_CH);
+  for (int i = 0; i < SH_MOD_TARGETS_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modTargetLocal[i]);
+  fprintf(f, "],\n \"engines\": [\n");
+  for (int e = 0; e < sh_engineCount(); ++e) {
+    const ShEngineInfo* info = sh_engineInfo(e);
+    uint8_t b[SH_CH_STRIDE];
+    sh_channelDefaults(b, e);
+    fprintf(f, "  {\"index\": %d, \"short\": ", e); str(info->shortName, 3);
+    fprintf(f, ", \"long\": "); str(info->longName, 8);
+    fprintf(f, ", \"defaults\": [");
+    for (int i = 0; i < SH_CH_STRIDE; ++i) fprintf(f, "%s%d", i ? "," : "", b[i]);
+    fprintf(f, "], \"params\": [");
+    bool first = true;
+    for (int i = 0; i < SH_NUM_ENGINE_PARAMS; ++i) {
+      const ShParamDesc& d = info->params[i];
+      if (d.type == SH_PT_NONE) continue;
+      fprintf(f, "%s{\"slot\": %d, \"short\": ", first ? "" : ", ", i); str(d.shortName, 3);
+      fprintf(f, ", \"type\": %d, \"def\": %d, \"count\": %d, \"labels\": [", d.type, d.def, d.count);
+      if (d.type == SH_PT_LIST)
+        for (int k = 0; k < d.count; ++k) { if (k) fputc(',', f); str(d.labels[k], 3); }
+      fprintf(f, "]}");
+      first = false;
+    }
+    fprintf(f, "]}%s\n", e + 1 < sh_engineCount() ? "," : "");
+  }
+  fprintf(f, " ]\n}\n");
+  fclose(f);
+}
+
+uint8_t kitParams[NUM_PARAMS];
+
+void ApplyFx(uint16_t p, uint8_t value) {
+  const float flt = value / 127.f;
+  switch (p) {
+    case PAR_FX_TYPE: fxBus.fxType = value; FxBus_updateParameter(); break;
+    case PAR_FX_ROUTING: fxBus.audioRouting = value; break;
+    case PAR_FX_DRY_WET: fxBus.dryWet = value / 100.f; break;
+    case PAR_FX_DIST_TYPE: fxBus.distortion.distortionType = value; break;
+    case PAR_FX_P1: FxBus_setParameter(0, flt); break;
+    case PAR_FX_P2: FxBus_setParameter(1, flt); break;
+    case PAR_FX_P3: FxBus_setParameter(2, flt); break;
+    case PAR_FX_P4: FxBus_setParameter(3, flt); break;
+    case PAR_FX_RATIO: Compressor_setRatio(&fxBus.compressor, value); break;
+    case PAR_FX_WAVE: Ringmod_setWave(&fxBus.ringmod, value); break;
+    case PAR_FX_DELAY_TYPE: fxBus.delay.delayType = value; break;
+    default: break;
+  }
+}
+
+// adds a mono block to an interleaved stereo buffer according to a routing value
+void Route(uint8_t dest, float pl, float pr, const int16_t* d, int16_t* a, int16_t* b, int16_t* fx) {
+  auto add = [](int16_t& o, float v) {
+    float x = o + v; o = static_cast<int16_t>(x > 32767 ? 32767 : (x < -32768 ? -32768 : x));
+  };
+  for (int i = 0; i < kBlock; ++i) {
+    switch (dest) {
+      case MIXER_ROUTING_DAC1_STEREO: add(b[2 * i], d[i] * pl); add(b[2 * i + 1], d[i] * pr); break;
+      case MIXER_ROUTING_DAC2_STEREO: add(a[2 * i], d[i] * pl); add(a[2 * i + 1], d[i] * pr); break;
+      case MIXER_ROUTING_DAC1_L: add(b[2 * i], d[i]); break;
+      case MIXER_ROUTING_DAC1_R: add(b[2 * i + 1], d[i]); break;
+      case MIXER_ROUTING_DAC2_L: add(a[2 * i], d[i]); break;
+      case MIXER_ROUTING_DAC2_R: add(a[2 * i + 1], d[i]); break;
+      default: add(fx[2 * i], d[i] * pl); add(fx[2 * i + 1], d[i] * pr); break;
+    }
+  }
+}
+
+// pattern: 6 lines of 16 steps; '.' rest, 'x' hit, 'X' accent, 'o' alt trigger (channel 6),
+// 'r' ratchet (3 hits per step)
+int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, const char* outPath,
+              const char* metricsPath) {
+  FILE* f = fopen(kitPath, "rb");
+  if (!f) { perror(kitPath); return 1; }
+  char name[9] = { 0 };
+  if (fread(name, 1, 8, f) != 8 || fread(kitParams, 1, END_OF_SOUND_PARAMETERS, f) != END_OF_SOUND_PARAMETERS) {
+    fprintf(stderr, "short kit file\n"); return 1;
+  }
+  fclose(f);
+  std::vector<std::string> pat;
+  FILE* pf = fopen(patPath, "r");
+  if (!pf) { perror(patPath); return 1; }
+  char line[256];
+  while (fgets(line, sizeof(line), pf) && pat.size() < 6) {
+    std::string l(line);
+    while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
+    if (!l.empty()) pat.push_back(l);
+  }
+  fclose(pf);
+  while (pat.size() < 6) pat.push_back("................");
+
+  FxBus_init();
+  sh_channelsInit(&kitParams[PAR_CH_BASE]);
+  for (uint16_t p = PAR_FX_TYPE; p <= PAR_FX_DELAY_TYPE; ++p) ApplyFx(p, kitParams[p]);
+
+  const double step = 60.0 / bpm / 4.0;
+  const int steps = bars * 16;
+  const int blocks = static_cast<int>((steps * step + 1.5) * kRate / kBlock);
+  std::vector<int16_t> out;
+  double peak[SH_NUM_CHANNELS] = { 0 }, sq[SH_NUM_CHANNELS] = { 0 };
+  double mixPeak = 0;
+  long n = 0;
+  struct Ev { double t; int ch; int vel; int alt; };
+  std::vector<Ev> ev;
+  for (int s = 0; s < steps; ++s)
+    for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
+      const std::string& l = pat[ch];
+      if (l.empty()) continue;
+      const char c = l[s % l.size()];
+      const double t = s * step;
+      if (c == 'x') ev.push_back({ t, ch, 90, 0 });
+      else if (c == 'X') ev.push_back({ t, ch, 127, 0 });
+      else if (c == 'o') ev.push_back({ t, ch, 110, 1 });
+      else if (c == 'r') for (int k = 0; k < 3; ++k) ev.push_back({ t + k * step / 3, ch, 100 - k * 15, 0 });
+    }
+  std::sort(ev.begin(), ev.end(), [](const Ev& a, const Ev& b) { return a.t < b.t; });
+  size_t next = 0;
+  for (int bl = 0; bl < blocks; ++bl) {
+    const double t = static_cast<double>(bl) * kBlock / kRate;
+    while (next < ev.size() && ev[next].t <= t) {
+      sh_trigger(ev[next].ch, ev[next].vel, ev[next].alt);
+      ++next;
+    }
+    int16_t a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 }, fx[2 * kBlock] = { 0 };
+    sh_beginBlock();
+    for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
+      int16_t buf[kBlock];
+      sh_channelRender(ch, buf);
+      for (int i = 0; i < kBlock; ++i) {
+        const double v = buf[i] / 32768.0;
+        peak[ch] = std::max(peak[ch], std::fabs(v));
+        sq[ch] += v * v;
+      }
+      float pl, pr;
+      sh_channelPan(ch, &pl, &pr);
+      Route(sh_channelRouting(ch), pl, pr, buf, a, b, fx);
+    }
+    FxBus_process(fx, &a[0], &a[1], &b[0], &b[1], kBlock);
+    for (int i = 0; i < 2 * kBlock; ++i) {
+      float x = (a[i] + b[i]) * 0.8f;
+      x = x > 32767 ? 32767 : (x < -32768 ? -32768 : x);
+      mixPeak = std::max(mixPeak, std::fabs(x) / 32768.0);
+      out.push_back(static_cast<int16_t>(x));
+    }
+    n += kBlock;
+  }
+  if (outPath && *outPath) WriteWav(outPath, out, 2);
+  if (metricsPath && *metricsPath) {
+    FILE* m = fopen(metricsPath, "w");
+    // level of the last 0.3 s, well after the last hit: kits must go quiet
+    double tail = 0;
+    const size_t tn = static_cast<size_t>(0.3 * kRate) * 2;
+    for (size_t i = out.size() - tn; i < out.size(); ++i) tail += (out[i] / 32768.0) * (out[i] / 32768.0);
+    tail = std::sqrt(tail / tn);
+    fprintf(m, "{\"name\": \"%s\", \"tail\": %.5f, \"mix_peak\": %.4f, \"peak\": [", name, tail, mixPeak);
+    for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) fprintf(m, "%s%.4f", ch ? ", " : "", peak[ch]);
+    fprintf(m, "], \"rms\": [");
+    for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) fprintf(m, "%s%.5f", ch ? ", " : "", std::sqrt(sq[ch] / n));
+    fprintf(m, "]}\n");
+    fclose(m);
+  }
+  return 0;
+}
+
 // raw engine output level, before the strip
 void AnalyseEngines() {
   for (int e = 0; e < sh_engineCount(); ++e) {
@@ -141,6 +333,11 @@ void AnalyseEngines() {
 int main(int argc, char** argv) {
   const std::string dir = argc > 1 ? argv[1] : ".";
   if (dir == "--levels") { AnalyseEngines(); return 0; }
+  if (dir == "--dump" && argc > 2) { DumpJson(argv[2]); return 0; }
+  if (dir == "--kit" && argc > 7) {
+    // --kit <kit.snd> <pattern.txt> <bpm> <bars> <out.wav|""> <metrics.json|"">
+    return RenderKit(argv[2], argv[3], atof(argv[4]), atoi(argv[5]), argv[6], argv[7]);
+  }
   if (dir == "--bench" && argc > 3) {
     // render one channel for N seconds, a hit every 125 ms (for instruction counting)
     const int e = atoi(argv[2]);
