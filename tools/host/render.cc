@@ -312,7 +312,7 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
 // single hits of every channel of a kit (dry, after the strip), for the bank
 // checks: 7 runs (channels 1..6, then channel 6 from the alt trigger) of
 // <seconds> each, written as raw float32 to <out>
-int RenderHits(const char* kitPath, double seconds, const char* outPath) {
+int RenderHits(const char* kitPath, double seconds, const char* outPath, bool altAll = false) {
   FILE* f = fopen(kitPath, "rb");
   if (!f) { perror(kitPath); return 1; }
   char name[9] = { 0 };
@@ -323,11 +323,12 @@ int RenderHits(const char* kitPath, double seconds, const char* outPath) {
   FILE* o = fopen(outPath, "wb");
   if (!o) { perror(outPath); return 1; }
   const int blocks = static_cast<int>(seconds * kRate / kBlock);
-  for (int run = 0; run < 7; ++run) {
-    const int ch = run < 6 ? run : 5;
+  const int runs = altAll ? 12 : 7;
+  for (int run = 0; run < runs; ++run) {
+    const int ch = run < 6 ? run : (altAll ? run - 6 : 5);
     sh_channelsInit(&kitParams[PAR_CH_BASE]);
     for (int bl = 0; bl < blocks; ++bl) {
-      if (bl == 1) sh_trigger(static_cast<uint8_t>(ch), 110, run == 6);
+      if (bl == 1) sh_trigger(static_cast<uint8_t>(ch), 110, run >= 6);
       sh_beginBlock();
       sh_cvProcess();
       int16_t buf[kBlock];
@@ -387,6 +388,8 @@ int main(int argc, char** argv) {
     return RenderKit(argv[2], argv[3], atof(argv[4]), atoi(argv[5]), argv[6], argv[7]);
   }
   if (dir == "--hits" && argc > 4) return RenderHits(argv[2], atof(argv[3]), argv[4]);
+  // all six channels, then all six from the alternative trigger
+  if (dir == "--hits12" && argc > 4) return RenderHits(argv[2], atof(argv[3]), argv[4], true);
   if (dir == "--bench" && argc > 3) {
     // render one channel for N seconds, a hit every 125 ms (for instruction counting)
     const int e = atoi(argv[2]);
