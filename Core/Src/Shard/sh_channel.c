@@ -392,9 +392,11 @@ void sh_channelRender(uint8_t ch, int16_t* buf)
 		p = view;
 	}
 
-	/* engine change (front panel or kit load) */
-	if(p[SHP_ENGINE] != sh_engineCurrent(ch))
-		sh_engineSelect(ch, p[SHP_ENGINE]);
+	/* engine change (front panel or kit load); unknown numbers (kit from a
+	 * newer firmware) fall back to engine 0 */
+	const uint8_t engine = p[SHP_ENGINE] < sh_engineCount() ? p[SHP_ENGINE] : 0;
+	if(engine != sh_engineCurrent(ch))
+		sh_engineSelect(ch, engine);
 
 	updateStrip(ch, c, p);
 
