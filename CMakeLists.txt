@@ -22,8 +22,12 @@ endif()
 project(LXR_V2_STM32F765_Eurorack
     VERSION 1.51
     DESCRIPTION "LXR V2 Eurorack drum module firmware"
-    LANGUAGES C ASM
+    LANGUAGES C CXX ASM
 )
+
+# SHARD: unofficial firmware based on the LXR firmware. Its own version is shown
+# on the start-up screen together with the LXR base version above.
+set(SHARD_VERSION "0.1")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
@@ -31,12 +35,16 @@ endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # The audio engine has to run at -O3 to keep up in real time, even in Debug builds.
 set(CMAKE_C_FLAGS_DEBUG     "-O3 -g3")
 set(CMAKE_C_FLAGS_RELEASE   "-O3 -g0")
+set(CMAKE_CXX_FLAGS_DEBUG   "-O3 -g3")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0")
 set(CMAKE_ASM_FLAGS_DEBUG   "-g3")
 set(CMAKE_ASM_FLAGS_RELEASE "")
 
@@ -64,7 +72,7 @@ include(${LXR_CMAKE_DIR}/firmware_outputs.cmake)
 add_library(lxr_board_config INTERFACE)
 target_include_directories(lxr_board_config INTERFACE Core/Inc)
 target_compile_options(lxr_board_config INTERFACE
-    $<$<COMPILE_LANGUAGE:C>:-ffast-math -freciprocal-math -mfp16-format=ieee -fomit-frame-pointer>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-ffast-math -freciprocal-math -mfp16-format=ieee -fomit-frame-pointer>
 )
 
 add_subdirectory(Drivers)
@@ -82,7 +90,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Linked at 0x08008000, behind the 32 KB bootloader.
 lxr_firmware_executable(${PROJECT_NAME} LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F765VGTX_FLASH.ld)
-lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRERIMG IMAGE_NAME LXRE_V2_V${PROJECT_VERSION})
+lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRERIMG IMAGE_NAME LXRE_SHARD_V${SHARD_VERSION})
 
 # "flash": application only, the bootloader on the device is left alone.
 lxr_add_openocd_flash_target(flash
@@ -148,9 +156,9 @@ if(NOT bootloader)
 endif()
 
 if(bootloader)
-    # LXRE_V2_V<version>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    # LXRE_SHARD_V<version>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
     lxr_add_combined_image(full_image
-        OUTPUT_NAME LXRE_V2_V${PROJECT_VERSION}_full
+        OUTPUT_NAME LXRE_SHARD_V${SHARD_VERSION}_full
         BOOTLOADER ${bootloader}
         APPLICATION ${PROJECT_NAME}
         BOOTLOADER_MAGIC LXRERIMG
@@ -181,7 +189,7 @@ if(TARGET full_image)
     list(APPEND info_depends full_image)  # print after everything else is done
 endif()
 lxr_add_update_info(update_info
-    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/LXRE_V2_V${PROJECT_VERSION}.img
+    IMAGE ${CMAKE_CURRENT_BINARY_DIR}/LXRE_SHARD_V${SHARD_VERSION}.img
     IMAGE_PATTERN LXRE*.img
     DEVICE "module"
     DEPENDS ${info_depends}

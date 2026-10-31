@@ -8,6 +8,9 @@
  */
 
 #include "menu/menu.h"
+#include "Shard/sh_ui.h"
+#include "Shard/sh_bridge.h"
+#include "Shard/sh_update.h"
 #include "lcd.h"
 #include <string.h>
 #include <stdlib.h>
@@ -257,6 +260,7 @@ const Name valueNames[NUM_NAMES] =
 
 		{SHORT_CV, CAT_GLOBAL, LONG_CV},/*TEXT_CV_SAVE*/
 		{SHORT_MORPH_TARGET, CAT_SOUND, LONG_MORPH_TARGET},/*TEXT_MORPH_TARGET*/
+		{SHORT_EMPTY,CAT_EMPTY,LONG_EMPTY},					/*TEXT_SH_DYN*/
 
 
 
@@ -265,317 +269,78 @@ const Name valueNames[NUM_NAMES] =
 //---------------------------------------------------------------
 // Parameter types. These correspond with ParamEnums and entries in parameter_values
 const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
-	    /*PAR_NONE*/ 			DTYPE_0B127,							// 0
-	    /*PAR_OSC_WAVE_DRUM1*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_OSC_WAVE_DRUM2*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_OSC_WAVE_DRUM3*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_OSC_WAVE_SNARE*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*NRPN_DATA_ENTRY_COARSE*/ DTYPE_0B127,
-	    /*PAR_WAVE1_CYM*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE1_HH*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_COARSE1*/ 		DTYPE_PM63,//DTYPE_0B127,
-	    /*PAR_FINE1*/ 			DTYPE_PM63,
-	    /*PAR_COARSE2*/			DTYPE_PM63,//DTYPE_0B127,,							// 10
-	    /*PAR_FINE2*/ 			DTYPE_PM63,
-	    /*PAR_COARSE3*/ 		DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_FINE3*/ 			DTYPE_PM63,
-	    /*PAR_COARSE4*/ 		DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_FINE4*/ 			DTYPE_PM63,
-	    /*PAR_COARSE5*/			DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_FINE5*/ 			DTYPE_PM63,
-	    /*PAR_COARSE6*/ 		DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_FINE6*/ 			DTYPE_PM63,
-	    /*PAR_MOD_WAVE_DRUM1*/  DTYPE_MENU | (MENU_WAVEFORM<<8),		//20
-	    /*PAR_MOD_WAVE_DRUM2*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_MOD_WAVE_DRUM3*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE2_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE3_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE2_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_WAVE3_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
-	    /*PAR_NOISE_FREQ1*/ 	DTYPE_0B127,
-	    /*PAR_MIX1*/ 			DTYPE_0B127,
-	    /*PAR_MOD_OSC_F1_CYM*/ 	DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_MOD_OSC_F2_CYM*/ 	DTYPE_PM63,//DTYPE_0B127,,							//30
-	    /*PAR_MOD_OSC_GAIN1_CYM*/ DTYPE_0B127,
-	    /*PAR_MOD_OSC_GAIN2_CYM*/ DTYPE_0B127,
-	    /*PAR_MOD_OSC_F1*/ 		DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_MOD_OSC_F2*/ 		DTYPE_PM63,//DTYPE_0B127,,
-	    /*PAR_MOD_OSC_GAIN1*/ 	DTYPE_0B127,
-	    /*PAR_MOD_OSC_GAIN2*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_FREQ_1*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_FREQ_2*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_FREQ_3*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_FREQ_4*/ 	DTYPE_0B127,							//40
-	    /*PAR_FILTER_FREQ_5*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_FREQ_6*/ 	DTYPE_0B127,
-	    /*PAR_RESO_1*/ 			DTYPE_0B127,
-	    /*PAR_RESO_2*/ 			DTYPE_0B127,
-	    /*PAR_RESO_3*/ 			DTYPE_0B127,
-	    /*PAR_RESO_4*/ 			DTYPE_0B127,
-	    /*PAR_RESO_5*/ 			DTYPE_0B127,
-	    /*PAR_RESO_6*/ 			DTYPE_0B127,
-	    /*PAR_VELOA1*/ 			DTYPE_0B127,
-	    /*PAR_VELOD1*/ 			DTYPE_0B127,							//50
-	    /*PAR_VELOA2*/ 			DTYPE_0B127,
-	    /*PAR_VELOD2*/ 			DTYPE_0B127,
-	    /*PAR_VELOA3*/ 			DTYPE_0B127,
-	    /*PAR_VELOD3*/ 			DTYPE_0B127,
-	    /*PAR_VELOA4*/ 			DTYPE_0B127,
-	    /*PAR_VELOD4*/ 			DTYPE_0B127,
-	    /*PAR_VELOA5*/ 			DTYPE_0B127,
-	    /*PAR_VELOD5*/ 			DTYPE_0B127,
-	    /*PAR_VELOA6*/ 			DTYPE_0B127,
-	    /*PAR_VELOD6_CLOSED*/ 	DTYPE_0B127,							//60
-	    /*PAR_VELOD6_OPEN*/ 	DTYPE_0B127,
-	    /*PAR_VOL_SLOPE1*/ 		DTYPE_0B127,
-	    /*PAR_VOL_SLOPE2*/ 		DTYPE_0B127,
-	    /*PAR_VOL_SLOPE3*/ 		DTYPE_0B127,
-	    /*PAR_VOL_SLOPE4*/ 		DTYPE_0B127,
-	    /*PAR_VOL_SLOPE5*/ 		DTYPE_0B127,
-	    /*PAR_VOL_SLOPE6*/ 		DTYPE_0B127,
-	    /*PAR_REPEAT4*/ 		DTYPE_0B127,
-	    /*PAR_REPEAT5*/ 		DTYPE_0B127,
-	    /*PAR_MOD_EG1*/ 		DTYPE_0B127,							//70
-	    /*PAR_MOD_EG2*/ 		DTYPE_0B127,
-	    /*PAR_MOD_EG3*/ 		DTYPE_0B127,
-	    /*PAR_MOD_EG4*/ 		DTYPE_0B127,
-	    /*PAR_MODAMNT1*/ 		DTYPE_0B127,
-	    /*PAR_MODAMNT2*/ 		DTYPE_0B127,
-	    /*PAR_MODAMNT3*/ 		DTYPE_0B127,
-	    /*PAR_MODAMNT4*/ 		DTYPE_0B127,
-	    /*PAR_PITCH_SLOPE1*/ 	DTYPE_0B127,
-	    /*PAR_PITCH_SLOPE2*/ 	DTYPE_0B127,
-	    /*PAR_PITCH_SLOPE3*/ 	DTYPE_0B127,							//80
-	    /*PAR_PITCH_SLOPE4*/ 	DTYPE_0B127,
-	    /*PAR_FMAMNT1*/ 		DTYPE_0B127,
-	    /*PAR_FM_FREQ1*/ 		DTYPE_PM63,//DTYPE_0B127,
-	    /*PAR_FMAMNT2*/ 		DTYPE_0B127,
-	    /*PAR_FM_FREQ2*/ 		DTYPE_PM63,//DTYPE_0B127,
-	    /*PAR_FMAMNT3*/ 		DTYPE_0B127,
-	    /*PAR_FM_FREQ3*/ 		DTYPE_PM63,//DTYPE_0B127,
-	    /*PAR_VOL1*/ 			DTYPE_0B127,
-	    /*PAR_VOL2*/ 			DTYPE_0B127,
-	    /*PAR_VOL3*/ 			DTYPE_0B127,							//90
-	    /*PAR_VOL4*/ 			DTYPE_0B127,
-	    /*PAR_VOL5*/ 			DTYPE_0B127,
-	    /*PAR_VOL6*/ 			DTYPE_0B127,
-	    /*PAR_PAN1*/ 			DTYPE_PM63,
-	    /*PAR_PAN2*/ 			DTYPE_PM63,
-	    /*PAR_PAN3*/ 			DTYPE_PM63,
-	    /*NRPN_FINE*/ 			DTYPE_0B127,
-	    /*NRPN_COARSE*/ 		DTYPE_0B127,
-	    /*PAR_PAN4*/ 			DTYPE_PM63,
-	    /*PAR_PAN5*/ 			DTYPE_PM63,								//100
-	    /*PAR_PAN6*/ 			DTYPE_PM63,
-	    /*PAR_DRIVE1*/ 			DTYPE_0B127,
-	    /*PAR_DRIVE2*/ 			DTYPE_0B127,
-	    /*PAR_DRIVE3*/ 			DTYPE_0B127,
-	    /*PAR_SNARE_DISTORTION*/ DTYPE_0B127,
-	    /*PAR_CYMBAL_DISTORTION*/ DTYPE_0B127,
-	    /*PAR_HAT_DISTORTION*/ 	DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION1*/ DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION2*/ DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION3*/ DTYPE_0B127,							//110
-	    /*PAR_VOICE_DECIMATION4*/ DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION5*/ DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION6*/ DTYPE_0B127,
-	    /*PAR_VOICE_DECIMATION_ALL */ DTYPE_0B127,
-	    /*PAR_FREQ_LFO1 */ 		DTYPE_0B127,
-	    /*PAR_FREQ_LFO2*/		DTYPE_0B127,
-	    /*PAR_FREQ_LFO3*/ 		DTYPE_0B127,
-	    /*PAR_FREQ_LFO4*/ 		DTYPE_0B127,
-	    /*PAR_FREQ_LFO5*/ 		DTYPE_0B127,
-	    /*PAR_FREQ_LFO6*/ 		DTYPE_0B127,							//120
-	    /*PAR_AMOUNT_LFO1*/		DTYPE_0B127,
-	    /*PAR_AMOUNT_LFO2*/ 	DTYPE_0B127,
-	    /*PAR_AMOUNT_LFO3*/ 	DTYPE_0B127,
-	    /*PAR_AMOUNT_LFO4*/		DTYPE_0B127,
-	    /*PAR_AMOUNT_LFO5*/ 	DTYPE_0B127,
-	    /*PAR_AMOUNT_LFO6*/ 	DTYPE_0B127,
-	    /*PAR_RESERVED4*/ 		DTYPE_0B127,
-	    /*PAR_FILTER_DRIVE_1*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_DRIVE_2*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_DRIVE_3*/ 	DTYPE_0B127,							//130
-	    /*PAR_FILTER_DRIVE_4*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_DRIVE_5*/ 	DTYPE_0B127,
-	    /*PAR_FILTER_DRIVE_6*/	DTYPE_0B127,
-	    /*PAR_MIX_MOD_1*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
-	    /*PAR_MIX_MOD_2*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
-	    /*PAR_MIX_MOD_3*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
-	    /*PAR_VOLUME_MOD_ON_OFF1*/ DTYPE_ON_OFF,
-	    /*PAR_VOLUME_MOD_ON_OFF2*/ DTYPE_ON_OFF,
-	    /*PAR_VOLUME_MOD_ON_OFF3*/ DTYPE_ON_OFF,
-	    /*PAR_VOLUME_MOD_ON_OFF4*/ DTYPE_ON_OFF,						//140
-	    /*PAR_VOLUME_MOD_ON_OFF5*/ DTYPE_ON_OFF,
-	    /*PAR_VOLUME_MOD_ON_OFF6*/ DTYPE_ON_OFF,
-	    /*PAR_VELO_MOD_AMT_1*/ 	DTYPE_0B127,
-	    /*PAR_VELO_MOD_AMT_2*/ 	DTYPE_0B127,
-	    /*PAR_VELO_MOD_AMT_3*/ 	DTYPE_0B127,
-	    /*PAR_VELO_MOD_AMT_4*/ 	DTYPE_0B127,
-	    /*PAR_VELO_MOD_AMT_5*/ 	DTYPE_0B127,
-	    /*PAR_VELO_MOD_AMT_6*/ 	DTYPE_0B127,
-	    /*PAR_VEL_DEST_1*/ 		DTYPE_TARGET_SELECTION_VELO,
-	    /*PAR_VEL_DEST_2*/ 		DTYPE_TARGET_SELECTION_VELO,			//150
-	    /*PAR_VEL_DEST_3*/ 		DTYPE_TARGET_SELECTION_VELO,
-	    /*PAR_VEL_DEST_4*/ 		DTYPE_TARGET_SELECTION_VELO,
-	    /*PAR_VEL_DEST_5*/ 		DTYPE_TARGET_SELECTION_VELO,
-	    /*PAR_VEL_DEST_6*/ 		DTYPE_TARGET_SELECTION_VELO,
-	    /*PAR_WAVE_LFO1*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
-	    /*PAR_WAVE_LFO2*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
-	    /*PAR_WAVE_LFO3*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
-	    /*PAR_WAVE_LFO4 */ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
-	    /*PAR_WAVE_LFO5*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
-	    /*PAR_WAVE_LFO6*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),		//160
-	    /*PAR_VOICE_LFO1*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_VOICE_LFO2*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_VOICE_LFO3*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_VOICE_LFO4*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_VOICE_LFO5*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_VOICE_LFO6*/ 		DTYPE_VOICE_LFO,
-	    /*PAR_TARGET_LFO1*/ 	DTYPE_TARGET_SELECTION_LFO,
-	    /*PAR_TARGET_LFO2*/ 	DTYPE_TARGET_SELECTION_LFO,
-	    /*PAR_TARGET_LFO3*/ 	DTYPE_TARGET_SELECTION_LFO,
-	    /*PAR_TARGET_LFO4*/ 	DTYPE_TARGET_SELECTION_LFO,				//170
-	    /*PAR_TARGET_LFO5*/ 	DTYPE_TARGET_SELECTION_LFO,
-	    /*PAR_TARGET_LFO6*/ 	DTYPE_TARGET_SELECTION_LFO,
-	    /*PAR_RETRIGGER_LFO1*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_RETRIGGER_LFO2*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_RETRIGGER_LFO3*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_RETRIGGER_LFO4*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_RETRIGGER_LFO5*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_RETRIGGER_LFO6*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
-	    /*PAR_SYNC_LFO1*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
-	    /*PAR_SYNC_LFO2*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),		//180
-	    /*PAR_SYNC_LFO3*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
-	    /*PAR_SYNC_LFO4*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
-	    /*PAR_SYNC_LFO5*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
-	    /*PAR_SYNC_LFO6*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
-	    /*PAR_OFFSET_LFO1*/ 	DTYPE_0B127,
-	    /*PAR_OFFSET_LFO2*/ 	DTYPE_0B127,
-	    /*PAR_OFFSET_LFO3*/ 	DTYPE_0B127,
-	    /*PAR_OFFSET_LFO4*/ 	DTYPE_0B127,
-	    /*PAR_OFFSET_LFO5*/ 	DTYPE_0B127,
-	    /*PAR_OFFSET_LFO6*/ 	DTYPE_0B127,							//190
-	    /*PAR_FILTER_TYPE_1*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_FILTER_TYPE_2*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_FILTER_TYPE_3*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_FILTER_TYPE_4*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_FILTER_TYPE_5*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_FILTER_TYPE_6*/ 	DTYPE_MENU | (MENU_FILTER<<8),
-	    /*PAR_TRANS1_VOL*/ 		DTYPE_0B127,
-	    /*PAR_TRANS2_VOL*/ 		DTYPE_0B127,
-	    /*PAR_TRANS3_VOL*/ 		DTYPE_0B127,
-	    /*PAR_TRANS4_VOL*/ 		DTYPE_0B127,							//200
-	    /*PAR_TRANS5_VOL*/ 		DTYPE_0B127,
-	    /*PAR_TRANS6_VOL*/ 		DTYPE_0B127,
-	    /*PAR_TRANS1_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS2_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS3_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS4_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS5_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS6_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
-	    /*PAR_TRANS1_FREQ*/ 	DTYPE_0B127,
-	    /*PAR_TRANS2_FREQ*/ 	DTYPE_0B127,							//210
-	    /*PAR_TRANS3_FREQ*/ 	DTYPE_0B127,
-	    /*PAR_TRANS4_FREQ*/ 	DTYPE_0B127,
-	    /*PAR_TRANS5_FREQ*/ 	DTYPE_0B127,
-	    /*PAR_TRANS6_FREQ*/ 	DTYPE_0B127,
-	    /*PAR_AUDIO_OUT1*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
-	    /*PAR_AUDIO_OUT2*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
-	    /*PAR_AUDIO_OUT3*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
-	    /*PAR_AUDIO_OUT4*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
-	    /*PAR_AUDIO_OUT5*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
-	    /*PAR_AUDIO_OUT6*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),		//220
-	    // these 7
-	    /*CV_1VOCT_1*/		DTYPE_NOTE_NAME,
-	    /*CV_1VOCT_2*/		DTYPE_NOTE_NAME,
-	    /*CV_1VOCT_3*/		DTYPE_NOTE_NAME,
-	    /*CV_1VOCT_4*/		DTYPE_NOTE_NAME,
-	    /*CV_1VOCT_5*/		DTYPE_NOTE_NAME,
-	    /*CV_1VOCT_6*/		DTYPE_NOTE_NAME,
-	    /*PAR_UNUSED7*/		DTYPE_NOTE_NAME,
+	[PAR_NONE]				= DTYPE_0B127,
+	/* SHARD channel blocks: range and texts come from Shard/sh_ui.c */
+	[PAR_CH_BASE ... PAR_CH_END - 1] = DTYPE_SH,
+	[PAR_FX_TYPE] = DTYPE_MENU | (MENU_FX<<8),
+	[PAR_FX_ROUTING] = DTYPE_MENU | (MENU_AUDIO_OUT_FX<<8),
+	[PAR_FX_DRY_WET] = DTYPE_0B100,
+	[PAR_FX_DIST_TYPE] = DTYPE_MENU| (MENU_DIST<<8),
+	[PAR_FX_P1] = DTYPE_0B127,
+	[PAR_FX_P2] = DTYPE_0B127,
+	[PAR_FX_P3] = DTYPE_0B127,
+	[PAR_FX_P4] = DTYPE_0B127,
+	[PAR_FX_RATIO] = DTYPE_MENU | (MENU_RATIO<<8),
+	[PAR_FX_WAVE] = DTYPE_MENU | (MENU_WAVEFORM<<8),
+	[PAR_FX_REVERB_TYPE] = DTYPE_MENU | (MENU_REVERB<<8),
+	[PAR_FX_DELAY_TYPE] = DTYPE_MENU | (MENU_DELAY<<8),
+	[PAR_MORPH_KIT_DEST] = DTYPE_0B127,
+	[PAR_CV_DEST_1] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_2] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_3] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_4] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_5] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_6] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_7] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_8] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_9] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_10] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_11] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_12] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_13] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_14] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_15] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_16] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_17] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_DEST_18] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV_MOD_AMT_1] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_2] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_3] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_4] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_5] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_6] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_7] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_8] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_9] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_10] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_11] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_12] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_13] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_14] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_15] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_16] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_17] = DTYPE_0B100,
+	[PAR_CV_MOD_AMT_18] = DTYPE_0B100,
+	[PAR_CV_SRC_1] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_2] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_3] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_4] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_5] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_6] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_7] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_8] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_9] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_10] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_11] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_12] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_13] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_14] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_15] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_16] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_17] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	[PAR_CV_SRC_18] = DTYPE_MENU | (MENU_CV_SRC<<8),
 
-		/*PAR_PWM_1,*/			DTYPE_0B127,
-		/*PAR_PWM_2,*/			DTYPE_0B127,
-		/*PAR_PWM_3,*/			DTYPE_0B127,
-		/*PAR_PWM_4,*/			DTYPE_0B127,
-		/*PAR_PWM_5,*/			DTYPE_0B127,
-		/*PAR_PWM_6,*/			DTYPE_0B127,
-
-		/*PAR_FX_TYPE*/			DTYPE_MENU | (MENU_FX<<8),
-		/*TEXT_FX_ROUTING*/		DTYPE_MENU | (MENU_AUDIO_OUT_FX<<8),
-		/*TEXT_FX_AMOUNT*/		DTYPE_0B100,
-
-		/*PAR_FX_DIST_TYPE*/ 	DTYPE_MENU| (MENU_DIST<<8),
-		/*PAR_FX_P1*/			DTYPE_0B127,
-		/*PAR_FX_P2*/			DTYPE_0B127,
-		/*PAR_FX_P3*/			DTYPE_0B127,
-		/*PAR_FX_P4*/			DTYPE_0B127,
-		/*PAR_FX_RATIO*/		DTYPE_MENU | (MENU_RATIO<<8),
-		/*PAR_FX_WAVE*/			DTYPE_MENU | (MENU_WAVEFORM<<8),
-		/*PAR_FX_REVERB_TYPE*/	DTYPE_MENU | (MENU_REVERB<<8),
-		/*PAR_FX_DELAY_TYPE*/	DTYPE_MENU | (MENU_DELAY<<8),
-		/*PAR_MORPH_KIT_DEST*/	DTYPE_0B127,
-
-		/*PAR_CV_DEST_1*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_2*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_3*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_4*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_5*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_6*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_7*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_8*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_9*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_10*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_11*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_12*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_13*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_14*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_15*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_16*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_17*/		DTYPE_TARGET_SELECTION_CV,
-		/*PAR_CV_DEST_18*/		DTYPE_TARGET_SELECTION_CV,
-
-		/*PAR_CV_MOD_AMT_1*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_2*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_3*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_4*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_5*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_6*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_7*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_8*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_9*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_10*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_11*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_12*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_13*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_14*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_15*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_16*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_17*/	DTYPE_0B100,
-		/*PAR_CV_MOD_AMT_18*/	DTYPE_0B100,
-
-		/*PAR_CV_SRC_1*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_2*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_3*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_4*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_5*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_6*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_7*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_8*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_9*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_10*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_11*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_12*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_13*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_14*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_15*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_16*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_17*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-		/*PAR_CV_SRC_18*/		DTYPE_MENU | (MENU_CV_SRC<<8),
-
-
-	    /*PAR_ROLL*/ 			DTYPE_MENU | (MENU_ROLL_RATES<<8),
+	[PAR_ROLL] = 			DTYPE_MENU | (MENU_ROLL_RATES<<8),
 	    /*PAR_MORPH*/ 			DTYPE_0B255,
 	    /*PAR_ACTIVE_STEP */ 	DTYPE_0B127,							//230
 	    /*PAR_STEP_VOLUME*/ 	DTYPE_0B127,
@@ -600,6 +365,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_TRACK_ROTATION*/  DTYPE_1B16,  //**PATROT this is not shown in menu, but if it were it would really be 0 to 15
 		/*PAR_STEP_FLAM*/ 		DTYPE_MENU | (MENU_STEP_FLAM<<8),							//251
 		/*PAR_STEP_SHIFT*/		DTYPE_MENU | (MENU_STEP_SHIFT<<8),
+	    /*PAR_SH_UPDATE*/		DTYPE_SH,
+	    /*PAR_SH_CPU*/			DTYPE_SH,
 	    /*PAR_BPM*/ 			DTYPE_0B255,							//251
 	    /*PAR_MIDI_CHAN_1*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_2*/ 	DTYPE_1B16,
@@ -1485,7 +1252,14 @@ static uint8_t has2ndPage(uint8_t menuPage)
 		textType = pgm_read_byte(&menuPages[menu_activePage][menuPage].top1 + 4);
 	}
 
-//	const uint8_t textType = pgm_read_byte(&menuPages[menu_activePage][menuPage].top1 + 4);
+	//SHARD: engine pages only have a 2nd screen if the engine uses slots 5-8
+	if(textType == TEXT_SH_DYN && buttonHandler_getMode() != SELECT_MODE_MOD)
+	{
+		for(uint8_t i=4;i<8;i++)
+			if(shui_isUsed(pgm_read_word(&menuPages[menu_activePage][menuPage].bot1 + i)))
+				return 1;
+		return 0;
+	}
 	if(textType != TEXT_EMPTY)
 	{
 		return 1;
@@ -1589,45 +1363,15 @@ void menu_setNumSamples(uint8_t num)
 
 static void menu_displayModTargetFull(uint8_t curParmVal)
 {
-
-	//**AUTOM **VELO - determine the full name to display for edit mode
-	// a letters for the category and 8 letters for the name
-
-	if( pgm_read_word(&modTargets[curParmVal].param)==PAR_NONE ) {
-		strcpy(&editDisplayBuffer[1][0],menuText_off);
-		return;
-	}
-
-	uint8_t nameidx = pgm_read_byte(&modTargets[curParmVal].nameIdx);
-
-	strcpy(&editDisplayBuffer[1][0],
-		(const char PROGMEM *)(&catNames[
-					 pgm_read_byte(&valueNames[nameidx].category)
-										]));
-	strcpy(&editDisplayBuffer[1][8],
-		(const char PROGMEM *)(&longNames[
-					pgm_read_byte(&valueNames[nameidx].longName)
-										 ]));
+	//SHARD: "C2 aBD  Decay" or "off"
+	shui_modDestFull(curParmVal, &editDisplayBuffer[1][0]);
 }
 
 static void menu_displayModTargetShort(uint8_t curParmVal, char *valueAsText, char inclVoice)
 {
-	//**AUTOM **VELO - render a short name for non edit mode (encoder mode)
-
-	if( pgm_read_word(&modTargets[curParmVal].param)==PAR_NONE ) {
-		memcpy(valueAsText,menuText_off,3);
-	} else {
-		uint8_t off=0;
-		if(inclVoice){
-			// first digit is voice #, subsequent two letters are part of short name
-			// remember that curParmVal is our index into modTargets, not an actual parameter number
-			valueAsText[off++]=(char)(voiceFromModTargValue(curParmVal) + '0');
-		}
-
-		const uint8_t name = pgm_read_byte(&modTargets[curParmVal].nameIdx);
-		memcpy(&valueAsText[off],shortNames[pgm_read_byte(&valueNames[name].shortName)],(size_t)(3-off));
-
-	}
+	(void)inclVoice;
+	//SHARD: channel number + 2 letters of the parameter
+	shui_modDestShort(curParmVal, valueAsText);
 }
 
 //-----------------------------------------------------------------
@@ -1662,6 +1406,14 @@ void menu_repaintGeneric()
 		// just clear the whole thing
 		memset(&editDisplayBuffer[0][0],' ',16);
 		memset(&editDisplayBuffer[1][0],' ',16);
+
+		if((parameter_dtypes[parNr] & 0xFF) == DTYPE_SH)
+		{
+			//SHARD: engine dependent names and values
+			shui_editTop(parNr, &editDisplayBuffer[0][0]);
+			shui_editBottom(parNr, curParmVal, &editDisplayBuffer[1][0]);
+			return;
+		}
 
 #if !EURORACK_MODULE
 		if((parameter_dtypes[parNr] & 0xff) == DTYPE_AUTOM_TARGET)
@@ -1733,7 +1485,7 @@ void menu_repaintGeneric()
 
 			case DTYPE_PM63: //switch(parameters_dtypes[parNr] & 0x0F)
 				// -63 to +63
-				if( (parNr == PAR_COARSE1) || (parNr == PAR_COARSE2) || (parNr == PAR_COARSE3) || (parNr == PAR_COARSE4) || (parNr == PAR_COARSE5) || (parNr == PAR_COARSE6)  || (parNr == PAR_FM_FREQ1) || (parNr == PAR_FM_FREQ2) || (parNr == PAR_FM_FREQ3) || (parNr == PAR_MOD_OSC_F1_CYM)  || (parNr == PAR_MOD_OSC_F2_CYM) || (parNr == PAR_MOD_OSC_F1) || (parNr == PAR_MOD_OSC_F2) )
+				if(0)
 				{
 					numtostrps(&editDisplayBuffer[1][13],(int8_t)(curParmVal - 60));
 				}
@@ -1806,14 +1558,24 @@ void menu_repaintGeneric()
 		const uint8_t is2ndPage = (activeParameter>3) * 4;
 
 		// top texts
-		memcpy(&editDisplayBuffer[0][0],
-			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top1+is2ndPage)].shortName)],3);
-		memcpy(&editDisplayBuffer[0][4],
-			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top2+is2ndPage)].shortName)],3);
-		memcpy(&editDisplayBuffer[0][8],
-			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top3+is2ndPage)].shortName)],3);
-		memcpy(&editDisplayBuffer[0][12],
-			&shortNames[pgm_read_byte(&valueNames[pgm_read_byte(&ap->top4+is2ndPage)].shortName)],3);
+		for(uint8_t i=0;i<4;i++)
+		{
+			const uint8_t topName = pgm_read_byte(&ap->top1 + i + is2ndPage);
+			const uint16_t botPar = pgm_read_word(&ap->bot1 + i + is2ndPage);
+			if(topName == TEXT_SH_DYN)
+			{
+				//SHARD: name from the engine / channel strip
+				if(shui_isUsed(botPar))
+					shui_shortName(botPar, &editDisplayBuffer[0][4*i]);
+				else
+					memcpy(&editDisplayBuffer[0][4*i], menuText_blank, 3);
+			}
+			else
+			{
+				memcpy(&editDisplayBuffer[0][4*i],
+					&shortNames[pgm_read_byte(&valueNames[topName].shortName)],3);
+			}
+		}
 
 		// capitalize selected item
 		upr_three(&editDisplayBuffer[0][(activeParameter%4)*4]);
@@ -1838,6 +1600,13 @@ void menu_repaintGeneric()
 			} else { //not if(parNr==PAR_NONE)
 
 				switch(parameter_dtypes[parNr] & 0xFF) {
+				case DTYPE_SH:
+					//SHARD
+					if(shui_isUsed(parNr))
+						shui_valueShort(parNr, curParmVal, valueAsText);
+					else
+						memcpy(valueAsText,menuText_blank,3);
+					break;
 				case DTYPE_TARGET_SELECTION_CV:
 				case DTYPE_TARGET_SELECTION_VELO: //switch(parameters[parNr].dtype&0x0F)
 				case DTYPE_TARGET_SELECTION_LFO: //switch(parameters[parNr].dtype&0x0F)
@@ -1852,7 +1621,7 @@ void menu_repaintGeneric()
 					*/
 				case DTYPE_PM63: //switch(parameters[parNr].dtype&0x0F)
 					// -63 to 64
-					if( (parNr == PAR_COARSE1) || (parNr == PAR_COARSE2) || (parNr == PAR_COARSE3) || (parNr == PAR_COARSE4) || (parNr == PAR_COARSE5) || (parNr == PAR_COARSE6)  || (parNr == PAR_FM_FREQ1) || (parNr == PAR_FM_FREQ2) || (parNr == PAR_FM_FREQ3) || (parNr == PAR_MOD_OSC_F1_CYM)  || (parNr == PAR_MOD_OSC_F2_CYM) || (parNr == PAR_MOD_OSC_F1) || (parNr == PAR_MOD_OSC_F2) )
+					if(0)
 					{
 						numtostrps(valueAsText,(int8_t)(curParmVal - 60));
 					}
@@ -2371,7 +2140,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 	HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
 #endif
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
-					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
+					menu_TargetVoiceGapIndex = 0;
 
 					menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[menu_saveOptions.category];
 
@@ -2394,7 +2163,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 #else
 					preset_loadDrumset(menu_selectedPresetNr[menu_saveOptions.category],0);
 					// **LFOTARGFIX - save the gap index
-					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
+					menu_TargetVoiceGapIndex = 0;
 #endif
 					break;
 
@@ -2941,6 +2710,21 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 	// handle the button being clicked or released
 	if(button != lastEncoderButton) { // was the button clicked?
 		btnClicked=button;
+		if(btnClicked && !editModeActive && menu_activePage == MENU_MIDI_PAGE
+				&& buttonHandler_getMode() != SELECT_MODE_MOD)
+		{
+			//SHARD: push on the "Upd" item starts the firmware update dialog
+			const uint8_t activeParameter	= menuIndex & MASK_PARAMETER;
+			const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
+			if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) == PAR_SH_UPDATE)
+			{
+				shupd_menu();
+				lastEncoderButton = 0;
+				lcd_clear();
+				menu_repaintAll();
+				return;
+			}
+		}
 		if(btnClicked)
 		{
 
@@ -3090,140 +2874,22 @@ static void menu_encoderChangeParameter(int8_t inc)
 
 	switch(parameter_dtypes[paramNr] & 0xFF)
 	{
-	case DTYPE_TARGET_SELECTION_VELO: //parameter_dtypes[paramNr] & 0x0F
-	{
-		//**VELO encoder value limit to start and end of range for this voice
-		// get voice, and figure valid range, translate to param number before sending
-		uint8_t voiceNr=(uint8_t)(paramNr - PAR_VEL_DEST_1);
-		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(inc < 0) // going down, allow 0
-				*paramValue=0;
-			else // going up fix to start
-				*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (*paramValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
+	case DTYPE_SH:
+		//SHARD channel parameter: range depends on the engine
+		if(!shui_isUsed(paramNr))
+		{
+			*paramValue = 0;
+			return;
 		}
-
-		// determine the parameter id to send across
-		uint8_t value = (uint8_t)pgm_read_word(&modTargets[*paramValue].param);
-		uint8_t upper,lower;
-		/*
-		 *  upper: rightmost bit is 1 if the parameter we are targeting is in the "above 127" range
-		 *         next 6 bits are the voice number (0 to 5) of which voice is being dealt with here
-		 *  lower: the (0-127) value representing which parameter is being modulated
-		 */
-		upper = (uint8_t)( (uint8_t)((value&0x80)>>7) | ((voiceNr&0x3f)<<1) );
-		lower = value&0x7f;
-		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-		//return;
-	}
-		break;
-
-	case DTYPE_VOICE_LFO://parameter_dtypes[paramNr] & 0x0F
-	{
-		//**LFO - limit voice number to 1-6 range. determine target selection so we can send it with voice #
-		if(*paramValue < 1)
-			*paramValue = 1;
-		else if(*paramValue > 6)
-			*paramValue = 6;
-
-		// **LFOTARGFIX - ensure that the lfo mod target is pointing to the same type of modulation
-		// on the new voice
-		const uint8_t newTargVal=getModTargetIdxFromGapIdx((uint8_t)(*paramValue-1),menu_TargetVoiceGapIndex);
-		// update the lfo mod target
-		activeParameters[PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1)] = newTargVal;
-
-		// determine the real param value given the index into modTargets
-		uint8_t value =  (uint8_t)pgm_read_word(&modTargets[newTargVal].param);
-
-		/*  upper: rightmost bit is 1 if the parameter we are targeting is in the "above 127" range
-		 *         next 6 bits are the voice number (0 to 5) of which voice is being dealt with here
-		 *  lower: the (0-127) value representing which parameter is being modulated
-		 */
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VOICE_LFO1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-		//return;
-	}
-		break;
-	case DTYPE_TARGET_SELECTION_LFO://parameter_dtypes[paramNr] & 0x0F
-	{
-		//**LFO - limit encoder start and end to range for the target voice (not the lfo number)
-		// this is a value from 1 to 6, so we adjust to be 0 based
-		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(inc < 0) // going down, allow 0
-				*paramValue=0;
-			else // going up fix to start
-				*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (*paramValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		// **LFOTARGFIX - save the gap index
-		menu_TargetVoiceGapIndex = getModTargetGapIndex(*paramValue);
-
-		uint8_t value =  (uint8_t)pgm_read_word(&modTargets[*paramValue].param);
-		uint8_t upper,lower;
-		upper = (uint8_t)((uint8_t)((value&0x80)>>7) | (((paramNr - PAR_TARGET_LFO1)&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-		// fall thru to update display
-	}
+		if(*paramValue > shui_maxValue(paramNr))
+			*paramValue = shui_maxValue(paramNr);
 		break;
 
 	case DTYPE_TARGET_SELECTION_CV:
-	{
-		//**CV encoder value limit to start and end of range for this voice
-		// get voice, and figure valid range, translate to param number before sending
-		//uint8_t cvNr=(uint8_t)(paramNr - PAR_CV_DEST_1);
-		uint16_t cvNr=(paramNr - PAR_CV_DEST_1);
-		uint8_t voiceNr = cvNr / 3;
-#if NUM_MOD_SLOTS != 18
-#error voice calculation needs to be adapted to  NUM_MOD_SLOTS number!!!
-#endif
-
-
-		if(*paramValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(inc < 0) // going down, allow 0
-				*paramValue=0;
-			else // going up fix to start
-				*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (*paramValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			*paramValue = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		// determine the parameter id to send across
-		uint8_t value = (uint8_t)pgm_read_word(&modTargets[*paramValue].param);
-#if 0
-		uint8_t upper,lower;
-		/*
-		 *  upper: rightmost bit is 1 if the parameter we are targeting is in the "above 127" range
-		 *         next 6 bits are the voice number (0 to 5) of which voice is being dealt with here
-		 *  lower: the (0-127) value representing which parameter is being modulated
-		 */
-		upper = (uint8_t)( (uint8_t)((value&0x80)>>7) | ((voiceNr&0x3f)<<1) );
-		lower = value&0x7f;
-		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-#else
-		modNode_setDestination(&cvModulators[cvNr], value);
-
-#endif
-
-		//return;
-	}
+		//SHARD: any parameter of any channel
+		if(*paramValue >= SH_NUM_MOD_DESTS)
+			*paramValue = SH_NUM_MOD_DESTS - 1;
 		break;
-/*
-	case DTYPE_AUTOM_TARGET: {//parameter_dtypes[paramNr] & 0x0F
-		const uint8_t nmt=getNumModTargets();
-		//AUTOM - limit to valid range for encoder
-		if(*paramValue >= nmt)
-			*paramValue = (uint8_t)(nmt-1);
-		break;
-
-	}
-*/
 
 	case DTYPE_0B255:
 		//if(*paramValue > 255)
@@ -3293,16 +2959,13 @@ static void menu_encoderChangeParameter(int8_t inc)
 	} //parameter_dtypes[paramNr] & 0x0F
 
 
-	// TODO this will also send MIDI_CC or CC_2 for the above items that have already been sent. is this desired?
-	//send parameter change to uart tx
-	if(paramNr < 128) // => Sound Parameter
-		frontPanel_sendData(MIDI_CC,(uint8_t)paramNr,*paramValue);
-	//else if(paramNr > 127 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-	else if(paramNr > 127 && (paramNr <= 255)) // => Sound Parameter above 127
-		frontPanel_sendData(CC_2,(uint8_t)(paramNr-128),*paramValue);
-	else if (paramNr>=255 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 255
+	//SHARD: sound parameters are read by the channels, FX are applied here
+	if(paramNr < END_OF_SOUND_PARAMETERS)
 	{
-		frontPanel_sendData(CC3,(uint8_t)(paramNr-255),*paramValue);
+		sh_paramChanged(paramNr, 1);
+		uint8_t ch, local;
+		if(par_isChannelParam(paramNr, &ch, &local) && local == SHP_ENGINE)
+			menu_repaintAll();
 	}
 	else // non sound parameters (ie current step data, etc)
 		menu_parseGlobalParam(paramNr,activeParameters[paramNr]);
@@ -3376,6 +3039,17 @@ checkvalid:
 			goto checkvalid;
 		else
 			return; // would never happen unless we have > 3 skips in a row
+	}
+
+	if(param == TEXT_SH_DYN) // SHARD: engine slots that the engine doesn't use
+	{
+		uint16_t parNr;
+		if(buttonHandler_getMode() == SELECT_MODE_MOD)
+			parNr = pgm_read_word(&modMatrixPages[menu_activePage][activePage].bot1 + activeParameter);
+		else
+			parNr = pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
+		if(!shui_isUsed(parNr))
+			return;
 	}
 
 	if(param == TEXT_EMPTY) // disallow the change
@@ -3818,7 +3492,7 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	case PAR_P2_DEST:
 	{ //step range 0-127 value range 0-255!
 		//**AUTOM - translate back into a parameter when sending value to cortex
-		uint8_t tmp=(uint8_t)pgm_read_word(&modTargets[value].param);
+		uint8_t tmp=0; (void)value;
 		frontPanel_sendData(SEQ_CC, SEQ_SELECT_ACTIVE_STEP,activeParameters[PAR_ACTIVE_STEP]);
 		frontPanel_sendData((uint8_t)
 				(paramNr==PAR_P1_DEST ? SET_P1_DEST : SET_P2_DEST),tmp>>7,tmp&0x7f);
@@ -3857,17 +3531,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 		break;
 
 
-	case PAR_VOICE_DECIMATION1:
-	case PAR_VOICE_DECIMATION2:
-	case PAR_VOICE_DECIMATION3:
-	case PAR_VOICE_DECIMATION4:
-	case PAR_VOICE_DECIMATION5:
-	case PAR_VOICE_DECIMATION6:
-	case PAR_VOICE_DECIMATION_ALL:
-		//select the track nr
-		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,((uint8_t)(paramNr-PAR_VOICE_DECIMATION1)));
-		//send the new output channel
-		frontPanel_sendData(VOICE_CC,VOICE_DECIMATION,value);
+	case PAR_SH_UPDATE:
+		/* the update screen is started by pushing the encoder, see menu_parseEncoder */
 		break;
 
 		/*
@@ -4071,42 +3736,12 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 
 	switch(parameter_dtypes[paramNr] & 0xFF)
 	{
-	case DTYPE_TARGET_SELECTION_CV:
-	case DTYPE_TARGET_SELECTION_VELO:
-	case DTYPE_TARGET_SELECTION_LFO: {
-
-
-#if 0
-		//**VELO **LFO limit range to start and end for the applicable voice, but allow a setting of 0 (for off)
-		uint8_t voiceNr=0;
-		uint8_t s, e, rng;
-		if(paramNr >= PAR_VEL_DEST_1 && paramNr <= PAR_VEL_DEST_6 )
-			voiceNr=(uint8_t)(paramNr-PAR_VEL_DEST_1);
-		else if(paramNr >= PAR_TARGET_LFO1 && paramNr <= PAR_TARGET_LFO6) {
-			// this is the voice being targeted, not the lfo number
-			voiceNr=(uint8_t)(mainParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		}
-		s=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		e=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		// start will be a non-zero value. We need to allow setting a value of 0 (off) or
-		// something within the start to end range.
-		rng=(uint8_t)(frac * ((e-s)+1)); // where in the range we are
-		if(!rng)
-			return 0; // set to off
-		else
-			return (uint8_t)((s-1)+rng); // set to an offset beginning at start of range
-
-#else
-#pragma message "noch machen!"
-#endif
-	}
+	case DTYPE_SH:
+		if(newValue > shui_maxValue(paramNr)) newValue = shui_maxValue(paramNr);
 		break;
-/*
-	case DTYPE_AUTOM_TARGET:
-		//AUTOM - scale to our range for pot value
-		if(newValue >= (getNumModTargets()-1)) newValue =  (getNumModTargets()-1);
-		//return (uint8_t)((getNumModTargets()-1) * frac);
-*/
+	case DTYPE_TARGET_SELECTION_CV:
+		if(newValue >= SH_NUM_MOD_DESTS) newValue = SH_NUM_MOD_DESTS - 1;
+		break;
 
 	case DTYPE_0B255:
 		//return value;
@@ -4303,6 +3938,12 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 
 
 
+	//SHARD: engine slots the current engine doesn't use
+	if(((parameter_dtypes[paramNr] & 0xFF) == DTYPE_SH) && !shui_isUsed(paramNr))
+		return 0;
+	if(paramNr == PAR_NONE)
+		return 0;
+
 	//parameter fetch. given the value of the pot, and the parameter number
 	// fetch the actual numeric value that the parameter should be set to
 	uint8_t dtypeValue = limitPotValue(diff, paramNr);//getDtypeValue(potValue,paramNr);
@@ -4338,209 +3979,16 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		activeParameters[paramNr] = dtypeValue;
 	}
 
-	switch(parameter_dtypes[paramNr] & 0xFF)
+	//SHARD: sound parameters are read by the channels, FX are applied here
+	if(paramNr < END_OF_SOUND_PARAMETERS)
 	{
-
-	case DTYPE_TARGET_SELECTION_VELO:
-	{
-	#if OLD_LFO_ROUTING
-		//**Velo - limit param start and end to range for the target voice
-		// this is a value from 1 to 6, so we adjust to be 0 based
-		uint8_t value = dtypeValue;
-		uint8_t voiceNr =  (paramNr - PAR_VEL_DEST_1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		activeParameters[paramNr] = value;
-		//**VELO knob value range. convert to param before sending
-		// the value we have is an index into modTargets, we need a parameter
-		value = (uint8_t)pgm_read_word(&modTargets[value].param);
-
-		/*
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VEL_DEST_1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-		*/
-
-		modNode_setDestination(&velocityModulators[(uint8_t)(paramNr - PAR_VEL_DEST_1)], value);
-	#endif
-		}
-		break;
-
-	case DTYPE_TARGET_SELECTION_CV:
-	{
-			//**limit param start and end to range for the target voice
-			// this is a value from 1 to 6, so we adjust to be 0 based
-			uint16_t value = dtypeValue;
-			uint16_t cvNr=(paramNr - PAR_CV_DEST_1);
-			uint8_t voiceNr = cvNr / 3;
-#if NUM_MOD_SLOTS != 18
-#error voice calculation needs to be adapted to  NUM_MOD_SLOTS number!!!
-#endif
-			if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-				if(diff < 0) // going down, allow 0
-					value=0;
-				else // going up fix to start
-					value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-			} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-			}
-
-			activeParameters[paramNr] = value;
-			//**VELO knob value range. convert to param before sending
-			// the value we have is an index into modTargets, we need a parameter
-			value = pgm_read_word(&modTargets[value].param);
-
-			/*
-			uint8_t upper,lower;
-			upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VEL_DEST_1))&0x3f)<<1));
-			lower = value&0x7f;
-			frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-			*/
-			modNode_setDestination(&cvModulators[cvNr], value);
-			//modNode_setDestination(&velocityModulators[(uint8_t)(paramNr - PAR_VEL_DEST_1)], value);
-		}
-		break;
-
-	case DTYPE_VOICE_LFO:
-	{
-#if OLD_LFO_ROUTING
-		// **LFOTARGFIX - ensure that the lfo mod target is pointing to the same type of modulation
-		// on the new voice
-		const uint8_t newTargVal=getModTargetIdxFromGapIdx((uint8_t)(dtypeValue-1),menu_TargetVoiceGapIndex);
-
-		// update the lfo mod target if applicable
-		activeParameters[PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1)] = newTargVal;
-
-		// determine the real param value given the index into modTargets
-		const uint8_t value =  (uint8_t)pgm_read_word(&modTargets[newTargVal].param);
-
-#if 0
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VOICE_LFO1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-#else
-		const uint8_t lfoNr = (uint8_t)(paramNr - PAR_VOICE_LFO1);
-		switch(lfoNr)
-		{
-		case 0:
-		case 1:
-		case 2:	modNode_setDestination(&voiceArray[lfoNr].lfo.modTarget, value);break;
-
-		case 3:	modNode_setDestination(&snareVoice.lfo.modTarget,value);		break;
-		case 4:	modNode_setDestination(&cymbalVoice.lfo.modTarget, value);		break;
-		case 5:	modNode_setDestination(&hatVoice.lfo.modTarget, value);			break;
-		default:
-			break;
-		}
-#endif
-#endif
+		sh_paramChanged(paramNr, 1);
+		uint8_t ch, local;
+		if(par_isChannelParam(paramNr, &ch, &local) && local == SHP_ENGINE)
+			menu_repaintAll();
 	}
-		break;
-	case DTYPE_TARGET_SELECTION_LFO:
-	{
-
-#if OLD_LFO_ROUTING
- 		//**LFO - limit param start and end to range for the target voice (not the lfo number)
-		// this is a value from 1 to 6, so we adjust to be 0 based
-		uint8_t value = dtypeValue;
-		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		activeParameters[paramNr] = value;
-
-
-		// **LFOTARGFIX - save the gap index
-		menu_TargetVoiceGapIndex = getModTargetGapIndex(value);
-
-		//**LFO convert to param value and send
-		// determine the real param value given the index into modTargets
-		value = (uint8_t)pgm_read_word(&modTargets[value].param);
-
-#if 0
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_TARGET_LFO1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-
-#else
-
-			const uint8_t lfoNr = (uint8_t)(paramNr - PAR_TARGET_LFO1);
-			switch(lfoNr)
-			{
-			case 0:
-			case 1:
-			case 2:	modNode_setDestination(&voiceArray[lfoNr].lfo.modTarget, value);break;
-
-			case 3:	modNode_setDestination(&snareVoice.lfo.modTarget,value);		break;
-			case 4:	modNode_setDestination(&cymbalVoice.lfo.modTarget, value);		break;
-			case 5:	modNode_setDestination(&hatVoice.lfo.modTarget, value);			break;
-			default:
-				break;
-			}
-#endif
-#endif
-
-	}
-		break;
-
-	default: // all other sound parameters are send as CC or CC2. anything else is handled specially
-	{
-
-		//-----------------
-		uint8_t morph;
-
-		//Do not morph audio routing or globals
-		if((paramNr < END_OF_SOUND_PARAMETERS))
-		{
-			if((paramNr >= PAR_AUDIO_OUT1) && (paramNr <= PAR_AUDIO_OUT6)) //morph_index++;
-			{
-				//always use source kit (morph = 0) for audio routing
-				morph = 0;
-			}
-			else
-			{
-				morph = activeParameters[PAR_MORPH];
-				//morph = preset_morphValue;
-				dtypeValue = preset_getMorphValue(paramNr, morph);
-				//dtypeValue = interpolate(activeParameters[paramNr],mainParameters[activeParameters[PAR_MORPH_TARGET]][paramNr],morph);
-			}
-		}
-
-		//-----------------
-
-
-		if(paramNr<128) // => Sound Parameter below 128
-			frontPanel_sendData(MIDI_CC,(uint8_t)paramNr,dtypeValue);
-		//else if(paramNr>=128 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-		else if(paramNr>=128 && (paramNr < 255)) // => Sound Parameter above 127
-			frontPanel_sendData(CC_2,(uint8_t)(paramNr-128),dtypeValue);
-
-		else if (paramNr>=255 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 255
-		{
-			frontPanel_sendData(CC3,(uint8_t)(paramNr-255),dtypeValue);
-
-		}
-		else
-			menu_parseGlobalParam(paramNr,dtypeValue);
-		break;
-	}
-	}
+	else
+		menu_parseGlobalParam(paramNr,dtypeValue);
 
 	return 1;
 }
@@ -4587,7 +4035,7 @@ uint8_t menu_getActiveVoice()
 void menu_setActiveVoice(uint8_t voiceNr)
 {
 	// **LFOTARGFIX - save the gap index
-	menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1+voiceNr]);
+	menu_TargetVoiceGapIndex = 0;
 	menu_activeVoice = voiceNr;
 };
 //----------------------------------------------------------------

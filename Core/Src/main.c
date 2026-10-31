@@ -19,12 +19,16 @@
 #include "encoder.h"
 #include "IO/adcPots.h"
 #include "Preset/PresetManager.h"
+#include "Shard/sh_bridge.h"
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <Soundengine/ModMatrix_Processor.h>
 #include "Soundengine/MIDI/Uart.h"
 
 // The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback.
+#ifndef SHARD_VERSION
+#define SHARD_VERSION "dev"
+#endif
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "1.51"
 #endif
@@ -238,11 +242,11 @@ int main(void)
 
 	//print boot up message
 lcd_clear();
-lcd_string("Sonic Potions");
+//SHARD: the start-up screen must show that this is modified firmware (NOTICE.md)
+lcd_string(SHARD_NAME " v" SHARD_VERSION);
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
-lcd_string(FIRMWARE_VERSION);
+lcd_string("custom LXR fw");
 
 lcd_showSplash();
 
@@ -325,9 +329,12 @@ adc_checkPots();
 
 //-----------------------
 
-sprintf(currentFolder, "/proj00");
+sprintf(currentFolder, SH_SD_ROOT "/prj00");
 if(sd_card_ok)
 {
+	//SHARD keeps its kits and projects apart from the LXR ones
+	f_mkdir(SH_SD_ROOT);
+
 
 
 
@@ -395,7 +402,7 @@ if(sd_card_ok)
 if(sd_card_ok)
 {
 	//return to project 0
-	f_chdir("/proj00");
+	f_chdir(SH_SD_ROOT "/prj00");
 
 	uint8_t lastUsedPreset;
 	preset_loadLastUsedPresetNrFromSD(&lastUsedPreset);
@@ -467,7 +474,7 @@ voiceControl_start();
 	  //TODO clean up this multi call mess!!!!
 
 	//  menu_tick();
-	  CV_process();
+	  //SHARD: CV_process() runs once per audio block inside the mixer
 	  soundengine_process();
 	  adc_checkPots();
 	  soundengine_process();

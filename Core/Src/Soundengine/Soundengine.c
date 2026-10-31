@@ -17,6 +17,9 @@
 #include <string.h>
 //#include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Shard/sh_channel.h"
+#include "Parameters.h"
+#include "menu/menu.h"
 
 uint8_t soundengine_calcNextSampleBlock()
 {
@@ -46,20 +49,13 @@ void soundengine_init()
 	CodecInit(SYNTH_FS);
 //#endif
 
-	parameterArray_init();
+	//SHARD: no parameter pointer table any more (parameterArray_init)
 
 #if !EURORACK_MODULE
 	euklid_init();
 #endif
 
 
-#if OLD_LFO_ROUTING
-	int i;
-	for(i=0;i<6;i++)
-	{
-		modNode_init(&velocityModulators[i]);
-	}
-#endif
 
 	//init the seq speed
 #if !EURORACK_MODULE
@@ -69,10 +65,8 @@ void soundengine_init()
 	memset(midi_MidiChannels,0,8);
 //	memset(midi_NoteOverride,0,7);
 
-	initDrumVoice();
-	Snare_init();
-	HiHat_init();
-	Cymbal_init();
+	//SHARD channels read their parameters straight from the edit buffer
+	sh_channelsInit(&activeParameters[PAR_CH_BASE]);
 
 	//precalc the first dma buffer block
 	soundengine_calcNextSampleBlock();

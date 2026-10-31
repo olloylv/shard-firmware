@@ -14,11 +14,8 @@
 
 #include <Soundengine/TriggerProcessor.h>
 #include "Soundengine/MIDI/MidiVoiceControl.h"
-#include "Soundengine/DSPAudio/DrumVoice.h"
-#include "Soundengine/DSPAudio/Snare.h"
-#include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/MIDI/MidiMessages.h"
-#include "Soundengine/DSPAudio/CymbalVoice.h"
+#include "Shard/sh_channel.h"
 //#include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -27,7 +24,7 @@
 #include "buttonHandler.h"
 //#include "LCD_driver.h"
 
-uint8_t voiceStatus[NUM_DRUM_VOICES];
+uint8_t voiceStatus[3];
 
 static uint8_t active_voices=0;	// which voices are currently playing a note
 //----------------------------------------------------------------
@@ -61,14 +58,11 @@ void voiceControl_processQueue()
 				if((buttonHandler_getMutedVoices()  & (1 << voice)) == 0)
 				{
 
-					if(voice < 3)
-						Drum_trigger(voice, voiceQueueVel[voice], voiceQueueNote[voice]);
-					else if(voice < 4)
-						Snare_trigger(voiceQueueVel[voice], voiceQueueNote[voice]);
-					else if(voice < 5)
-						Cymbal_trigger(voiceQueueVel[voice], voiceQueueNote[voice]);
+					//SHARD: trigger 7 (open hi-hat) is the alternative trigger of channel 6
+					if(voice < SH_NUM_CHANNELS)
+						sh_trigger(voice, voiceQueueVel[voice], 0);
 					else
-						HiHat_trigger(voiceQueueVel[voice],voice-5,voiceQueueNote[voice]);
+						sh_trigger(SH_NUM_CHANNELS - 1, voiceQueueVel[voice], 1);
 
 					//only flash LEDs when not in voice select mode (DRUM)
 					if(!buttonHandler_getDrumButton())

@@ -277,7 +277,7 @@ enum NamesEnum
 	TEXT_1VOCT,
 	TEXT_CV_SAVE,
 	TEXT_MORPH_TARGET,
-
+	TEXT_SH_DYN,		/* SHARD: name comes from Shard/sh_ui.c */
 
 	NUM_NAMES
 };
@@ -620,6 +620,7 @@ enum Datatypes
 	DTYPE_0B15,		//0-15
 	DTYPE_1B64,		//1-64
 	DTYPE_0B100,	// 0-100
+	DTYPE_SH,		// SHARD: range and text from Shard/sh_ui.c
 	//mööp - only 8 bit available, the others are used for menu :-/
 	//DTYPE_BPM,		// 0=EXT then 1 to 255
 

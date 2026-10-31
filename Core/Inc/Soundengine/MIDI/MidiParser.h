@@ -22,6 +22,8 @@
 
 
 //void midiParser_parseUartData(unsigned char data);
+/** SHARD: apply a FX bus parameter (PAR_FX_*) */
+void midiParser_setFxParam(uint16_t paramNr, uint8_t value);
 void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFloatModulator, float v);
 void midiParser_parseMidiMessage(MidiMsg msg);
 float midiParser_calcDetune(uint8_t value);

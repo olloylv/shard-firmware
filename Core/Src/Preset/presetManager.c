@@ -14,6 +14,10 @@
 //#include "../config.h"
 #include <frontPanelParser_ui.h>
 #include "Preset/PresetManager.h"
+#include "Shard/sh_bridge.h"
+#include "Shard/sh_params.h"
+#include "Soundengine/ModMatrix_Processor.h"
+#include "Soundengine/MIDI/MidiParser.h"
 //#include "../Hardware/SD/ff.h"
 #include "../../Middlewares/Third_Party/FatFs/src/ff.h"
 #include <stdio.h>
@@ -43,7 +47,7 @@ static uint8_t morph_state = 0; //flag for non blocking morph
 static uint16_t morph_index = 0;
 char savefileNames[NUM_KIT_SLOTS][NUM_SAVEFILE_NAMES][8];
 
-char currentFolder[13];
+char currentFolder[64];	//SHARD: also used as path buffer by empty_directory()
 
 //global morph parameter, set by PAR_MORPH and used by modulators
 uint8_t preset_morphValue;
@@ -224,15 +228,11 @@ FRESULT preset_LoadTmpKit()
 			if(END_OF_SOUND_PARAMETERS-bytesRead)
 				memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 
-			//special case mod targets. normalize.
-			const uint8_t nmt=getNumModTargets();
-			for(i=0;i<6;i++) {
-				// since I've changed the meaning of these, I'll ensure that it's valid for kits saved prior to the
-				// change
-				if(para[PAR_VEL_DEST_1+i] >= nmt )
-					para[PAR_VEL_DEST_1+i] = 0;
-				if(para[PAR_TARGET_LFO1+i] >= nmt )
-					para[PAR_TARGET_LFO1+i] = 0;
+			//SHARD: drop CV destinations outside the channel range
+			for(i=0;i<NUM_MOD_SLOTS;i++)
+			{
+				if(para[PAR_CV_DEST_1+i] >= SH_NUM_MOD_DESTS)
+					para[PAR_CV_DEST_1+i] = 0;
 			}
 		}
 
@@ -267,8 +267,8 @@ FRESULT preset_LoadTmpKit()
 void preset_initTmpFolder()
 {
 	/*
-	char folderName[13];
-	sprintf(folderName, "/tmp");
+	char folderName[24];
+	sprintf(folderName, SH_SD_ROOT "/tmp");
 
 	FRESULT res;
 	FILINFO fno;
@@ -485,52 +485,13 @@ uint8_t preset_isNameEmpty(char* name)
 //load init kit
 void preset_init(uint8_t presetNr)
 {
-
-	//const uint8_t presetNr = menu_selectedPresetNr[SAVE_TYPE_KIT];
-
-	//first the preset name
-	memcpy(savefileNames[presetNr][KIT_NAMES],initKit,8*sizeof(uint8_t));
-
-
-	if(preset_isNameEmpty(savefileNames[presetNr][KIT_NAMES]))
-	{
-		sprintf((void*)savefileNames[presetNr][KIT_NAMES], "Empty");
-	}
-
-
-	//then the data
-	//read the file content
-
-	int16_t i;
-	uint8_t *para;
-
-
-	para=mainParameters[presetNr];
-
-	for(int i=8;i<END_OF_SOUND_PARAMETERS; i++)
-	{
-		if(i<INIT_KIT_SIZE)
-			para[i-8] = initKit[i];
-		else
-			para[i-8] = 0;
-	}
-
-	//special case mod targets. normalize.
-	const uint8_t nmt=getNumModTargets();
-	for(i=0;i<6;i++) {
-		// since I've changed the meaning of these, I'll ensure that it's valid for kits saved prior to the
-		// change
-		if(para[PAR_VEL_DEST_1+i] >= nmt )
-			para[PAR_VEL_DEST_1+i] = 0;
-		if(para[PAR_TARGET_LFO1+i] >= nmt )
-			para[PAR_TARGET_LFO1+i] = 0;
-	}
+	//SHARD: empty slots get the SHARD init kit
+	sprintf((void*)savefileNames[presetNr][KIT_NAMES], "Init");
+	sh_buildInitKit(mainParameters[presetNr]);
 
 	//copy parameters to edit buffer
 	memcpy(activeParameters, mainParameters[presetNr], sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 	preset_sendDrumsetParameters();
-	//frontPanel_sendData(PRESET,PRESET_LOAD,presetNr);
-
 }
 
 //----------------------------------------------------
@@ -566,7 +527,7 @@ static void preset_writeDrumsetData(uint8_t presetNr, uint8_t isMorph)
 #else
 
 			//Do not morph audio routing
-			if((i >= PAR_AUDIO_OUT1) && (i <= PAR_AUDIO_OUT6)) //morph_index++;
+			if(sh_isRoutingParam(i)) //morph_index++;
 			{
 				//always use source kit (morph = 0) for audio routing
 				//morph = 0;
@@ -666,7 +627,7 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 
 #else
 			//Do not morph audio routing
-			if((i >= PAR_AUDIO_OUT1) && (i <= PAR_AUDIO_OUT6)) //morph_index++;
+			if(sh_isRoutingParam(i)) //morph_index++;
 			{
 				//always use source kit (morph = 0) for audio routing
 				//morph = 0;
@@ -906,7 +867,7 @@ FRESULT preset_loadLastUsedPresetNrFromSD(uint8_t* presetNr)
     *presetNr = 0;
     unsigned int bytesRead;
 
-    res = f_open((FIL*)&SDFile,"/state.idx",FA_OPEN_EXISTING | FA_READ);
+    res = f_open((FIL*)&SDFile,SH_SD_ROOT "/state.idx",FA_OPEN_EXISTING | FA_READ);
     if(res != FR_OK)
     {
     	//close the file handle
@@ -928,7 +889,7 @@ FRESULT preset_saveLastUsedPresetNrToSD(uint8_t presetNr)
     FRESULT res;
 
 	//open the file
-	res = f_open((FIL*)&SDFile,"/state.idx",FA_CREATE_ALWAYS | FA_WRITE);
+	res = f_open((FIL*)&SDFile,SH_SD_ROOT "/state.idx",FA_CREATE_ALWAYS | FA_WRITE);
 	if(res != FR_OK)
 	{
 		//close the file handle
@@ -974,15 +935,11 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr)
 		if(END_OF_SOUND_PARAMETERS-bytesRead)
 			memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 		
-		//special case mod targets. normalize.
-		const uint8_t nmt=getNumModTargets();
-		for(i=0;i<6;i++) {
-			// since I've changed the meaning of these, I'll ensure that it's valid for kits saved prior to the
-			// change
-			if(para[PAR_VEL_DEST_1+i] >= nmt )
-				para[PAR_VEL_DEST_1+i] = 0;
-			if(para[PAR_TARGET_LFO1+i] >= nmt )
-				para[PAR_TARGET_LFO1+i] = 0;
+		//SHARD: drop CV destinations outside the channel range
+		for(i=0;i<NUM_MOD_SLOTS;i++)
+		{
+			if(para[PAR_CV_DEST_1+i] >= SH_NUM_MOD_DESTS)
+				para[PAR_CV_DEST_1+i] = 0;
 		}
 
 
@@ -1091,140 +1048,20 @@ static uint8_t interpolate(uint8_t a, uint8_t b, uint8_t x)
 }
 
 //----------------------------------------------------
-IN_ITCM_RAM void preset_sendDrumsetParametersImmediate()
+void preset_sendDrumsetParametersImmediate()
 {
-	uint8_t i;
-		//special case mod targets
-		for(i=0;i<NUM_MOD_SLOTS;i++)
-		{
-			//**VELO load drumkit. translate to param value before sending
-			// parameter_values[PAR_VEL_DEST_1+i] is an index into modTargets, we need to send
-			// a parameter number
-			uint16_t value = pgm_read_word(&modTargets[activeParameters[PAR_VEL_DEST_1+i]].param);
-			uint8_t upper,lower;
-			upper = (uint8_t)(((value&0x80)>>7) | (((i)&0x3f)<<1));
-			lower = value&0x7f;
-			frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-
-			// ensure target voice # is valid
-			if(activeParameters[PAR_VOICE_LFO1+i] < 1 || activeParameters[PAR_VOICE_LFO1+i] > 6 )
-				activeParameters[PAR_VOICE_LFO1+i]=1;
-
-			// **LFO par_target_lfo will be an index into modTargets, but we need a parameter number to send
-			value = pgm_read_word(&modTargets[activeParameters[PAR_TARGET_LFO1+i]].param);
-
-			upper = (uint8_t)(((value&0x80)>>7) | (((i)&0x3f)<<1));
-			lower = value&0x7f;
-			frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-
-			//CV
-			value = pgm_read_word(&modTargets[activeParameters[PAR_CV_DEST_1+i]].param);
-			modNode_setDestination(&cvModulators[i], value);
-		}
-
-		static MidiMsg msg = {0,0,0, {0,0,0}};
-		//pre-send fx type to prevent clicks
-		/*
-		msg.status = CC_2;
-		msg.data1 = PAR_FX_TYPE-128; //stupid offset only in CC not CC2
-		msg.data2 = activeParameters[PAR_FX_TYPE];
-
-		//	msg.data1 += 1;
-		msg.data1 &= 0x7f;
-		midiParser_ccHandler(msg,1, 0, 0.f);
-		*/
-
-		//try to prevent click by sending BD params first
-
-		//stuff from the morph function
-		for(uint32_t i=0;i<END_OF_SOUND_PARAMETERS; i++)
-		{
-
-			uint8_t paramNumber = parameterOrder[i];
-
-			//const uint8_t morph = activeParameters[PAR_MORPH];
-
-			const uint8_t val = activeParameters[paramNumber];//interpolate(activeParameters[i],morphParameters[i],morph);
-
-			if(paramNumber < 128)
-			{
-				/* comes from cortex midi handler
-				 * stupid offset!
-				 * TODO fix this stupid offset			 *
-				 * 		frontParser_midiMsg.data1 += 1;
-
-						//because hh slope on front is 127 and on cortex is 0 wrap data1 at 127
-						frontParser_midiMsg.data1 &= 0x7f;
-				 *
-				 */
-				msg.status = MIDI_CC;
-				msg.data1 = paramNumber;
-				msg.data2 = val;
-
-				msg.data1 += 1;
-			//	msg.data1 &= 0x7f;
-				midiParser_ccHandler(msg,1, 0, 0.f);
-
-
-			}
-			else if (morph_index <= 255 )
-			{
-				msg.status = CC_2;
-				msg.data1 = paramNumber-128; //stupid offset only in CC not CC2
-				msg.data2 = val;
-
-			//	msg.data1 += 1;
-			//	msg.data1 &= 0x7f;
-				midiParser_ccHandler(msg,1, 0, 0.f);
-
-			}
-			else
-			{
-	#pragma message "nothing over 255 is morphed (mod matrix stuff)"
-			}
-			soundengine_process();
-		}
+	//SHARD: the channels read the edit buffer directly; only the FX bus and
+	//the morph state need to be updated
+	sh_applyKit();
+	preset_morph(activeParameters[PAR_MORPH], 1);
 }
 //----------------------------------------------------
 // send loaded parameters to back
 void preset_sendDrumsetParameters()
 {
-	uint8_t i;
-	//special case mod targets
-	for(i=0;i<NUM_MOD_SLOTS;i++)
-	{
-		//**VELO load drumkit. translate to param value before sending
-		// parameter_values[PAR_VEL_DEST_1+i] is an index into modTargets, we need to send
-		// a parameter number
-		uint16_t value = pgm_read_word(&modTargets[activeParameters[PAR_VEL_DEST_1+i]].param);
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | (((i)&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-
-		// ensure target voice # is valid
-		if(activeParameters[PAR_VOICE_LFO1+i] < 1 || activeParameters[PAR_VOICE_LFO1+i] > 6 )
-			activeParameters[PAR_VOICE_LFO1+i]=1;
-
-		// **LFO par_target_lfo will be an index into modTargets, but we need a parameter number to send
-		value = pgm_read_word(&modTargets[activeParameters[PAR_TARGET_LFO1+i]].param);
-
-		upper = (uint8_t)(((value&0x80)>>7) | (((i)&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-
-
-		//CV
-		value = pgm_read_word(&modTargets[activeParameters[PAR_CV_DEST_1+i]].param);
-		modNode_setDestination(&cvModulators[i], value);
-	}
-
-	// todo will this morph (and fuck up) our modulation targets?
+	sh_applyKit();
 	// send parameters (possibly combined with morph parameters) to back
 	preset_morph(activeParameters[PAR_MORPH], 1);
-
-
-
 }
 //----------------------------------------------------
 /*
@@ -1974,72 +1811,19 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr)
 //called periodically to process non blocking morph
 void preset_morph_tick()
 {
-	//morph_state = 0;
-	//return;
 	if(morph_state)
 	{
+		//SHARD: channel parameters are interpolated in the strips (sh_channelsMorph),
+		//here only the FX bus parameters are updated, one per call
+		if(morph_index < PAR_FX_TYPE || morph_index > PAR_FX_DELAY_TYPE)
+			morph_index = PAR_FX_TYPE;
 
-		uint8_t morph;
-
-		//Do not morph audio routing
-		if((morph_index >= PAR_AUDIO_OUT1) && (morph_index <= PAR_AUDIO_OUT6)) //morph_index++;
-		{
-			//always use source kit (morph = 0) for audio routing
-			morph = 0;
-		}
-		else
-		{
-			//morph = activeParameters[PAR_MORPH];
-			morph = preset_morphValue;
-		}
-
-		static MidiMsg msg = {0,0,0, {0,0,0}};
-
-
-		//const uint8_t val = interpolate(activeParameters[morph_index],morphParameters[morph_index],morph);
-		const uint8_t val = interpolate(activeParameters[morph_index],mainParameters[activeParameters[PAR_MORPH_TARGET]][morph_index],morph);
-
-
-		if(morph_index < 128)
-		{
-			/* comes from cortex midi handler
-			 * stupid offset!
-			 * TODO fix this stupid offset			 *
-			 * 		frontParser_midiMsg.data1 += 1;
-
-					//because hh slope on front is 127 and on cortex is 0 wrap data1 at 127
-					frontParser_midiMsg.data1 &= 0x7f;
-			 *
-			 */
-			msg.status = MIDI_CC;
-			msg.data1 = morph_index;
-			msg.data2 = val;
-
-			msg.data1 += 1;
-		//	msg.data1 &= 0x7f;
-			midiParser_ccHandler(msg,1, 0, 0.f);
-
-
-		}
-		else if (morph_index <= 255 )
-		{
-			msg.status = CC_2;
-			msg.data1 = morph_index-128; //stupid offset only in CC not CC2
-			msg.data2 = val;
-
-		//	msg.data1 += 1;
-		//	msg.data1 &= 0x7f;
-			midiParser_ccHandler(msg,1, 0, 0.f);
-
-		}
-		else
-		{
-#pragma message "nothing over 255 is morphed (mod matrix stuff)"
-		}
-
+		const uint8_t val = interpolate(activeParameters[morph_index],
+				mainParameters[activeParameters[PAR_MORPH_TARGET]][morph_index], preset_morphValue);
+		midiParser_setFxParam(morph_index, val);
 
 		morph_index++;
-		if(morph_index >= END_OF_SOUND_PARAMETERS)
+		if(morph_index > PAR_FX_DELAY_TYPE)
 		{
 			//finished morphing
 			morph_state = 0;
@@ -2057,17 +1841,18 @@ void preset_morph(uint8_t morph, uint8_t forceResetIndex)
 
 	if(forceResetIndex)
 	{
-		morph_index = 0; //reset index
+		morph_index = PAR_FX_TYPE; //reset index
 	}
-	else if(morph_index >= END_OF_SOUND_PARAMETERS)
+	else if(morph_index > PAR_FX_DELAY_TYPE)
 	{
 		//for modulation node controlled morph we can't always reset the index, or it will stay around 0 and never go up
 		//so we just reset it when the morph is finished already
-		morph_index = 0; //reset index
+		morph_index = PAR_FX_TYPE; //reset index
 	}
 	//initialize new morph
 	preset_morphValue = morph;
 	morph_state = 1; //start morph
+	sh_morphSet(morph ? mainParameters[activeParameters[PAR_MORPH_TARGET]] : 0, morph);
 
 #else
 	int i;
@@ -2189,7 +1974,7 @@ FRESULT preset_saveProject(uint8_t presetNr)
 	}
 */
 	//change project folder
-	sprintf(currentFolder, "/proj%02d", presetNr);
+	sprintf(currentFolder, SH_SD_ROOT "/prj%02d", presetNr);
 
 	res = f_stat(currentFolder, &fno);
 	if(res == FR_NO_FILE)
@@ -2485,7 +2270,7 @@ void preset_loadProjectNames(uint8_t projectNr)
 	FILINFO fno;
 
 	//change project folder
-	sprintf(currentFolder, "/proj%02d", projectNr);
+	sprintf(currentFolder, SH_SD_ROOT "/prj%02d", projectNr);
 
 	res = f_stat(currentFolder, &fno);
 	if(res == FR_NO_FILE)
@@ -2553,7 +2338,7 @@ FRESULT preset_loadProject(uint8_t presetNr)
 	lcd_string(PSTR("0%"));
 
 	//change project folder
-	sprintf(currentFolder, "/proj%02d", presetNr);
+	sprintf(currentFolder, SH_SD_ROOT "/prj%02d", presetNr);
 
 	res = f_stat(currentFolder, &fno);
 	if(res == FR_NO_FILE)

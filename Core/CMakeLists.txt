@@ -29,7 +29,7 @@ add_library(lxr_platform OBJECT
 )
 # Shown on the boot splash screen; comes from project(VERSION) in the top-level CMakeLists.txt.
 set_source_files_properties(Src/main.c PROPERTIES
-    COMPILE_DEFINITIONS "FIRMWARE_VERSION=\"${PROJECT_VERSION}\""
+    COMPILE_DEFINITIONS "FIRMWARE_VERSION=\"${PROJECT_VERSION}\";SHARD_VERSION=\"${SHARD_VERSION}\""
 )
 
 # Hardware inputs/outputs: shift-register buttons/LEDs, pots and CV inputs.
@@ -47,7 +47,6 @@ add_library(lxr_ui OBJECT
     Src/ledHandler.c
     Src/graphic.c
     Src/frontPanelParser.c
-    Src/Parameters.c
     Src/menu/Cc2Text.c
     Src/menu/menu.c
     Src/menu/screensaver.c
@@ -55,7 +54,6 @@ add_library(lxr_ui OBJECT
 
 # Kit/project storage on the SD card.
 add_library(lxr_preset OBJECT
-    Src/Preset/initKit.c
     Src/Preset/presetManager.c
 )
 
@@ -64,22 +62,16 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/1PoleLp.c
     Src/Soundengine/DSPAudio/automationNode.c
     Src/Soundengine/DSPAudio/BufferTools.c
-    Src/Soundengine/DSPAudio/CymbalVoice.c
     Src/Soundengine/DSPAudio/Decay.c
     Src/Soundengine/DSPAudio/distortion.c
     Src/Soundengine/DSPAudio/dither.c
-    Src/Soundengine/DSPAudio/DrumVoice.c
-    Src/Soundengine/DSPAudio/HiHat.c
-    Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/mixer.c
-    Src/Soundengine/DSPAudio/modulationNode.c
     Src/Soundengine/DSPAudio/Oscillator.c
     Src/Soundengine/DSPAudio/random.c
     Src/Soundengine/DSPAudio/ResonantFilter.c
     Src/Soundengine/DSPAudio/Samples.c
     Src/Soundengine/DSPAudio/SlopeEg2.c
     Src/Soundengine/DSPAudio/snapEg.c
-    Src/Soundengine/DSPAudio/Snare.c
     Src/Soundengine/DSPAudio/squareRootLut.c
     Src/Soundengine/DSPAudio/TiltEq.c
     Src/Soundengine/DSPAudio/transientGenerator.c
@@ -115,12 +107,33 @@ add_library(lxr_midi OBJECT
     Src/Soundengine/MIDI/MidiMessages.c
     Src/Soundengine/MIDI/MidiParser.c
     Src/Soundengine/MIDI/MidiVoiceControl.c
-    Src/Soundengine/MIDI/ParameterArray.c
     Src/Soundengine/MIDI/Uart.c
 )
 
+# SHARD: channel strips, sound engines (C++) and the third party DSP they use.
+add_library(lxr_shard OBJECT
+    Src/Shard/sh_channel.c
+    Src/Shard/sh_bridge.c
+    Src/Shard/sh_ui.c
+    Src/Shard/sh_update.c
+    Src/Shard/engines/engines.cc
+    Src/Shard/engines/lxr_engines.cc
+    Src/Shard/engines/plaits_engines.cc
+    Src/Shard/engines/md_engines.cc
+    Src/Shard/engines/idm_engines.cc
+    ThirdParty/stmlib/dsp/units.cc
+    ThirdParty/stmlib/utils/random.cc
+    ThirdParty/plaits/resources.cc
+    ThirdParty/plaits/dsp/physical_modelling/modal_voice.cc
+    ThirdParty/plaits/dsp/physical_modelling/resonator.cc
+    ThirdParty/plaits/dsp/physical_modelling/string.cc
+    ThirdParty/plaits/dsp/physical_modelling/string_voice.cc
+)
+target_include_directories(lxr_shard PRIVATE ThirdParty Src/Shard/engines)
+
 set(LXR_APP_MODULES
     lxr_platform
+    lxr_shard
     lxr_io
     lxr_ui
     lxr_preset
@@ -143,22 +156,15 @@ set(LXR_ITCM_SOURCES
     Src/Soundengine/cs4344_cs5343.c
     Src/Soundengine/FxBus.c
     Src/Soundengine/DSPAudio/1PoleLp.c
-    Src/Soundengine/DSPAudio/CymbalVoice.c
     Src/Soundengine/DSPAudio/Decay.c
     Src/Soundengine/DSPAudio/distortion.c
-    Src/Soundengine/DSPAudio/DrumVoice.c
-    Src/Soundengine/DSPAudio/HiHat.c
-    Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/mixer.c
-    Src/Soundengine/DSPAudio/modulationNode.c
     Src/Soundengine/DSPAudio/Oscillator.c
     Src/Soundengine/DSPAudio/ResonantFilter.c
     Src/Soundengine/DSPAudio/SlopeEg2.c
-    Src/Soundengine/DSPAudio/Snare.c
     Src/Soundengine/DSPAudio/transientGenerator.c
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
-    Src/Soundengine/MIDI/ParameterArray.c
 )
 if(LXR_ITCM_OPT)
     set_source_files_properties(${LXR_ITCM_SOURCES} PROPERTIES COMPILE_OPTIONS "${LXR_ITCM_OPT}")

@@ -51,6 +51,7 @@ void frontParser_parseNrpn(uint8_t value)
 			activeParameters[paramNr] = value;
 	}
 	
+#if 0 //SHARD: LFO / velocity targets of the desktop LXR are not used
 	if( (paramNr >= PAR_TARGET_LFO1) && (paramNr <= PAR_TARGET_LFO6) )
 	{
 		//**LFO receive nrpn translate TODO this needs to be checked. I'm not sure what needs to happen here.
@@ -91,7 +92,9 @@ void frontParser_parseNrpn(uint8_t value)
 		lower = value&0x7f;
 		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
 
-	}/* else if ( (frontParser_nrpnNr >= NRPN_MUTE_1) && (frontParser_nrpnNr <= NRPN_MUTE_7) )
+	}
+#endif
+	/* else if ( (frontParser_nrpnNr >= NRPN_MUTE_1) && (frontParser_nrpnNr <= NRPN_MUTE_7) )
 	{
 		const uint8_t voice = (uint8_t)(frontParser_nrpnNr - NRPN_MUTE_1);
 		const uint8_t onOff = value;

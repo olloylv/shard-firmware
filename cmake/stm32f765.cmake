@@ -34,7 +34,8 @@ target_compile_definitions(lxr_mcu INTERFACE
 target_compile_options(lxr_mcu INTERFACE
     ${LXR_MCU_FLAGS}
     --specs=nano.specs
-    $<$<COMPILE_LANGUAGE:C>:-ffunction-sections -fdata-sections>
+    $<$<COMPILE_LANGUAGE:C,CXX>:-ffunction-sections -fdata-sections>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-threadsafe-statics -fno-use-cxa-atexit>
     $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>
 )
 

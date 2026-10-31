@@ -36,6 +36,7 @@ else()
 endif()
 
 set(CMAKE_C_COMPILER   "${_arm_prefix}gcc${_arm_exe}")
+set(CMAKE_CXX_COMPILER "${_arm_prefix}g++${_arm_exe}")
 set(CMAKE_ASM_COMPILER "${_arm_prefix}gcc${_arm_exe}")
 set(CMAKE_OBJCOPY      "${_arm_prefix}objcopy${_arm_exe}" CACHE FILEPATH "" FORCE)
 set(CMAKE_OBJDUMP      "${_arm_prefix}objdump${_arm_exe}" CACHE FILEPATH "" FORCE)
@@ -44,6 +45,7 @@ set(CMAKE_NM           "${_arm_prefix}nm${_arm_exe}"      CACHE FILEPATH "" FORC
 
 set(CMAKE_EXECUTABLE_SUFFIX_C   ".elf")
 set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
+set(CMAKE_EXECUTABLE_SUFFIX_CXX ".elf")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)

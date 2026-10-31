@@ -54,7 +54,7 @@ enum
 
 extern uint8_t preset_morphValue;
 extern char savefileNames[NUM_KIT_SLOTS][NUM_SAVEFILE_NAMES][8];
-extern char currentFolder[13];
+extern char currentFolder[64];
 //extern char presetNameBuffer[8];
 //extern uint8_t activePresetNr; //currently loaded kit
 

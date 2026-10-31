@@ -1,3 +1,13 @@
+# SHARD — custom firmware for the Erica Synths LXR Eurorack module
+
+> **This is a modified, unofficial firmware** based on the open-source LXR firmware. It is not made,
+> approved or supported by Erica Synths. It replaces the sound engines with freely assignable
+> engines per channel (LXR classics, Plaits drums, Machinedrum-style and IDM engines) and adds a
+> firmware update from the SD card menu. See [SHARD.md](SHARD.md) (Russian) for the details.
+> Update files are named `LXRE_SHARD_V<version>.img`.
+
+The original README of the LXR firmware follows.
+
 # LXR V2 Eurorack firmware (STM32F765VG)
 
 Firmware for the LXR V2 Eurorack drum module: an STM32F765 (Cortex-M7, 216 MHz) running the drum

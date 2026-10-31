@@ -16,16 +16,19 @@
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/config.h"
 #include "Soundengine/AudioCodecManager.h"
-#include "Soundengine/DSPAudio/CymbalVoice.h"
-#include "Soundengine/DSPAudio/DrumVoice.h"
-#include "Soundengine/DSPAudio/Snare.h"
-#include "Soundengine/DSPAudio/HiHat.h"
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/squareRootLut.h"
 #include "main.h"
 #include "menu/menu.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/MIDI/MidiVoiceControl.h"
+#include "Soundengine/ModMatrix_Processor.h"
+#include "Shard/sh_channel.h"
+#include "Shard/sh_bridge.h"
+
+#if OUTPUT_DMA_SIZE != SH_BLOCK_SIZE
+#error "SHARD expects OUTPUT_DMA_SIZE == SH_BLOCK_SIZE"
+#endif
 
 	uint8_t r2_Available;
 	uint8_t l1_Available;
@@ -59,22 +62,7 @@ void mixer_init()
 	FxBus_init();
 }
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
-{
-	uint8_t i;
-	float phaseInc = mixer_decimation_rate[voiceNr]*mixer_decimation_rate[6];
-	for(i=0;i<OUTPUT_DMA_SIZE;i++)
-	{
-		mixer_decimation_cnt[voiceNr] += phaseInc;
-		if(mixer_decimation_cnt[voiceNr] >= 1.f)
-		{
-			mixer_decimation_cnt[voiceNr] -= 1.f;
-			mixer_voice_samples[voiceNr] = buffer[i];
-
-		}
-		buffer[i] = mixer_voice_samples[voiceNr];
-	}
-}
+/* SHARD: sample rate reduction moved into the channel strip (sh_channel.c) */
 //#pragma GCC push_options
 //#pragma GCC optimize ("O0")
 //-----------------------------------------------------------------------
@@ -557,168 +545,32 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 #endif
 
 
-#if OLD_LFO_ROUTING
-	//re assign velocity modulation
-	modNode_reassignVeloMod();
-#endif
-	//calc and dispatch LFO
-	lfo_calcNextValue(&voiceArray[0].lfo);
-	lfo_calcNextValue(&voiceArray[1].lfo);
-	lfo_calcNextValue(&voiceArray[2].lfo);
-	lfo_calcNextValue(&snareVoice.lfo);
-	lfo_calcNextValue(&cymbalVoice.lfo);
-	lfo_calcNextValue(&hatVoice.lfo);
+	sh_cpuBlockStart();
 
-	modNode_resetTargets();
-
-	//update filter frequencies
-	SVF_recalcFreq(&voiceArray[0].filter);
-	SVF_recalcFreq(&voiceArray[1].filter);
-	SVF_recalcFreq(&voiceArray[2].filter);
-	SVF_recalcFreq(&snareVoice.filter);
-	SVF_recalcFreq(&cymbalVoice.filter);
-	SVF_recalcFreq(&hatVoice.filter);
-
-	//process CV
+	//SHARD: LFOs and CV matrix, then the six channels
+	sh_beginBlock();
 	CV_process();
 
-	//--- Calc async -----
-	calcDrumVoiceAsync(0);
-	calcDrumVoiceAsync(1);
-	calcDrumVoiceAsync(2);
-
-	Snare_calcAsync();
-	Cymbal_calcAsync();
-	HiHat_calcAsync();
-
-	//calculate trigger io phase
-	//trigger_tickPhaseCounter();
-
-	//an array to store intermediate voice samples
-	//befor output distribution
 	int16_t sampleData[OUTPUT_DMA_SIZE];
 	int16_t fxBusData[OUTPUT_DMA_SIZE*2];
-
 	const uint8_t pos = 0;
 
 	//Clear is necessary, otherwise we keep trash data on non routed outputs
 	bufferTool_clearBuffer(output,OUTPUT_DMA_SIZE*2);
 	bufferTool_clearBuffer(output2,OUTPUT_DMA_SIZE*2);
-
 	bufferTool_clearBuffer(fxBusData,OUTPUT_DMA_SIZE*2);
 
-	//calc voice 1
-	calcDrumVoiceSyncBlock(0, sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(0,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[0],squareRootLut[127-voiceArray[0].pan] ,squareRootLut[voiceArray[0].pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
+	for(uint8_t ch = 0; ch < SH_NUM_CHANNELS; ch++)
+	{
+		float panL, panR;
+		sh_channelRender(ch, sampleData);
+		sh_channelPan(ch, &panL, &panR);
+		mixer_addDataToOutput(sh_channelRouting(ch), panL, panR, sampleData,
+				&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
+	}
 
-#if 0//SMOOTH_MIXER_VOL_PAN_DRIVE
-	//float mixPan 	= calcOnePole( &voiceArray[0].MixerPageFilter[1], voiceArray[0].pan);
-	//mixer_addDataToOutput(mixer_audioRouting[0],sqrtf((127-mixPan)/127.f) ,sqrtf(mixPan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-	mixer_addDataToOutputFilteredPan(mixer_audioRouting[0], voiceArray[0].pan, sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData, &voiceArray[1].MixerPageFilter[0]);
-#else
-
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[0],voiceArray[0].triggeredPanL  ,voiceArray[0].triggeredPanR , sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[0],sqrtf((127-voiceArray[0].pan)/127.f) ,sqrtf(voiceArray[0].pan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-#endif
-
-#if 1
-
-	//calc voice 2
-	calcDrumVoiceSyncBlock(1, sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(1,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[1],squareRootLut[127-voiceArray[1].pan] ,squareRootLut[voiceArray[1].pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-#if 0//SMOOTH_MIXER_VOL_PAN_DRIVE
-	//mixPan 	= calcOnePole( &voiceArray[1].MixerPageFilter[1], voiceArray[1].pan);
-	//mixer_addDataToOutput(mixer_audioRouting[1],sqrtf((127-mixPan)/127.f) ,sqrtf(mixPan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-	mixer_addDataToOutputFilteredPan(mixer_audioRouting[1], voiceArray[1].pan, sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData, &voiceArray[1].MixerPageFilter[1]);
-#else
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[1],voiceArray[1].triggeredPanL  ,voiceArray[1].triggeredPanR , 			sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[1],sqrtf((127-voiceArray[1].pan)/127.f) ,sqrtf(voiceArray[1].pan/127.f), 	sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-#endif
-	//calc voice 3
-	calcDrumVoiceSyncBlock(2, sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(2,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[2],squareRootLut[127-voiceArray[2].pan] ,squareRootLut[voiceArray[2].pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-#if 0//SMOOTH_MIXER_VOL_PAN_DRIVE
-
-	mixer_addDataToOutputFilteredPan(mixer_audioRouting[2], voiceArray[2].pan, sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData, &voiceArray[2].MixerPageFilter[1]);
-#else
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[2],voiceArray[2].triggeredPanL  ,voiceArray[2].triggeredPanR , 			sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[2],sqrtf((127-voiceArray[2].pan)/127.f) ,sqrtf(voiceArray[2].pan/127.f), 	sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-#endif
-	//calc snare
-	Snare_calcSyncBlock(sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(3,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[3],squareRootLut[127-snareVoice.pan], squareRootLut[snareVoice.pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[3],snareVoice.triggeredPanL  ,snareVoice.triggeredPanR , 			sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[3],sqrtf((127-snareVoice.pan)/127.f), sqrtf(snareVoice.pan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-	//calc cymbal
-	Cymbal_calcSyncBlock(sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(4,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[4],squareRootLut[127-cymbalVoice.pan],	squareRootLut[cymbalVoice.pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[4],cymbalVoice.triggeredPanL  ,cymbalVoice.triggeredPanR , 			sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[4],sqrtf((127-cymbalVoice.pan)/127.f),	sqrtf(cymbalVoice.pan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-
-
-	//calc HiHat
-	HiHat_calcSyncBlock(sampleData,OUTPUT_DMA_SIZE);
-	//decimate voice
-	mixer_decimateBlock(5,sampleData);
-	//copy to selected dma buffer
-#if USE_SQRT_LUT
-	mixer_addDataToOutput(mixer_audioRouting[5],squareRootLut[127-hatVoice.pan],squareRootLut[hatVoice.pan], sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-#if USE_TRIGGERED_PAN
-	mixer_addDataToOutput(mixer_audioRouting[5],hatVoice.triggeredPanL  ,hatVoice.triggeredPanR , 			sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#else
-	mixer_addDataToOutput(mixer_audioRouting[5],sqrtf((127-hatVoice.pan)/127.f),sqrtf(hatVoice.pan/127.f), sampleData,&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
-#endif
-#endif
-
-#endif
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
+	sh_cpuBlockEnd();
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{
