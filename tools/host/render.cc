@@ -132,6 +132,7 @@ void DumpJson(const char* path) {
           SHP_ENGINE, SHP_TUNE, SHP_FINE, SHP_E0, SHP_ATTACK, SHP_DECAY, SHP_SLOPE, SHP_REPEAT, SHP_DECAY_ALT,
           SHP_VELVOL, SHP_AEG_MODE, SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_TYPE, SHP_FILT_DRIVE, SHP_VOL, SHP_PAN,
           SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG);
+  fprintf(f, " \"mod_ch_base\": %d, \"mod_globals\": %d,\n", SH_MOD_CH_BASE, SH_MOD_GLOBALS);
   fprintf(f, " \"mod_targets_per_ch\": %d, \"mod_target_local\": [", SH_MOD_TARGETS_PER_CH);
   for (int i = 0; i < SH_MOD_TARGETS_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modTargetLocal[i]);
   fprintf(f, "],\n \"engines\": [\n");
@@ -231,8 +232,8 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
   const int blocks = static_cast<int>((steps * step + 1.5) * kRate / kBlock);
   std::vector<int16_t> out;
   double peak[SH_NUM_CHANNELS] = { 0 }, sq[SH_NUM_CHANNELS] = { 0 };
-  double mixPeak = 0;
-  long n = 0;
+  double mixPeak = 0, outPeak = 0;
+  long n = 0, clips = 0;
   struct Ev { double t; int ch; int vel; int alt; };
   std::vector<Ev> ev;
   for (int s = 0; s < steps; ++s)
@@ -270,6 +271,9 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
     }
     FxBus_process(fx, &a[0], &a[1], &b[0], &b[1], kBlock);
     for (int i = 0; i < 2 * kBlock; ++i) {
+      const int pa = std::abs(static_cast<int>(a[i])), pb = std::abs(static_cast<int>(b[i]));
+      outPeak = std::max(outPeak, std::max(pa, pb) / 32768.0);
+      clips += (pa >= 32767) + (pb >= 32767);
       float x = (a[i] + b[i]) * 0.8f;
       x = x > 32767 ? 32767 : (x < -32768 ? -32768 : x);
       mixPeak = std::max(mixPeak, std::fabs(x) / 32768.0);
@@ -285,13 +289,47 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
     const size_t tn = static_cast<size_t>(0.3 * kRate) * 2;
     for (size_t i = out.size() - tn; i < out.size(); ++i) tail += (out[i] / 32768.0) * (out[i] / 32768.0);
     tail = std::sqrt(tail / tn);
-    fprintf(m, "{\"name\": \"%s\", \"tail\": %.5f, \"mix_peak\": %.4f, \"peak\": [", name, tail, mixPeak);
+    fprintf(m, "{\"name\": \"%s\", \"tail\": %.5f, \"mix_peak\": %.4f, \"out_peak\": %.4f, \"clip\": %ld, \"peak\": [",
+            name, tail, mixPeak, outPeak, clips);
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) fprintf(m, "%s%.4f", ch ? ", " : "", peak[ch]);
     fprintf(m, "], \"rms\": [");
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) fprintf(m, "%s%.5f", ch ? ", " : "", std::sqrt(sq[ch] / n));
     fprintf(m, "]}\n");
     fclose(m);
   }
+  return 0;
+}
+
+// single hits of every channel of a kit (dry, after the strip), for the bank
+// checks: 7 runs (channels 1..6, then channel 6 from the alt trigger) of
+// <seconds> each, written as raw float32 to <out>
+int RenderHits(const char* kitPath, double seconds, const char* outPath) {
+  FILE* f = fopen(kitPath, "rb");
+  if (!f) { perror(kitPath); return 1; }
+  char name[9] = { 0 };
+  if (fread(name, 1, 8, f) != 8 || fread(kitParams, 1, END_OF_SOUND_PARAMETERS, f) != END_OF_SOUND_PARAMETERS) {
+    fprintf(stderr, "short kit file\n"); return 1;
+  }
+  fclose(f);
+  FILE* o = fopen(outPath, "wb");
+  if (!o) { perror(outPath); return 1; }
+  const int blocks = static_cast<int>(seconds * kRate / kBlock);
+  for (int run = 0; run < 7; ++run) {
+    const int ch = run < 6 ? run : 5;
+    sh_channelsInit(&kitParams[PAR_CH_BASE]);
+    for (int bl = 0; bl < blocks; ++bl) {
+      if (bl == 1) sh_trigger(static_cast<uint8_t>(ch), 110, run == 6);
+      sh_beginBlock();
+      int16_t buf[kBlock];
+      float fb[kBlock];
+      for (int c = 0; c < SH_NUM_CHANNELS; ++c) {
+        sh_channelRender(static_cast<uint8_t>(c), buf);
+        if (c == ch) for (int i = 0; i < kBlock; ++i) fb[i] = buf[i] / 32768.f;
+      }
+      fwrite(fb, sizeof(float), kBlock, o);
+    }
+  }
+  fclose(o);
   return 0;
 }
 
@@ -338,6 +376,7 @@ int main(int argc, char** argv) {
     // --kit <kit.snd> <pattern.txt> <bpm> <bars> <out.wav|""> <metrics.json|"">
     return RenderKit(argv[2], argv[3], atof(argv[4]), atoi(argv[5]), argv[6], argv[7]);
   }
+  if (dir == "--hits" && argc > 4) return RenderHits(argv[2], atof(argv[3]), argv[4]);
   if (dir == "--bench" && argc > 3) {
     // render one channel for N seconds, a hit every 125 ms (for instruction counting)
     const int e = atoi(argv[2]);

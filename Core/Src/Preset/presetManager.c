@@ -16,6 +16,7 @@
 #include "Preset/PresetManager.h"
 #include "Shard/sh_bridge.h"
 #include "Shard/sh_params.h"
+#include "Shard/sh_morph.h"
 #include "Soundengine/ModMatrix_Processor.h"
 #include "Soundengine/MIDI/MidiParser.h"
 //#include "../Hardware/SD/ff.h"
@@ -179,6 +180,8 @@ FRESULT preset_saveTmpKit()
 	res = f_open((FIL*)&SDFile,"perf.tmp",FA_CREATE_ALWAYS | FA_WRITE);
 	f_write((FIL*)&SDFile,&activeParameters[PAR_MORPH] ,1,&bytesWritten);
 	f_write((FIL*)&SDFile,&activeParameters[PAR_MORPH_TARGET] ,1,&bytesWritten);
+	f_write((FIL*)&SDFile,&activeParameters[PAR_SH_MORPH_ALG] ,1,&bytesWritten);
+	f_write((FIL*)&SDFile,&activeParameters[PAR_SH_MORPH_SHP] ,1,&bytesWritten);
 	f_close((FIL*)&SDFile);
 
 
@@ -216,7 +219,6 @@ FRESULT preset_LoadTmpKit()
 
 	//read the file content
 		bytesRead=1;
-		int16_t i;
 		uint8_t *para;
 		bytesRead = 0;
 
@@ -228,12 +230,8 @@ FRESULT preset_LoadTmpKit()
 			if(END_OF_SOUND_PARAMETERS-bytesRead)
 				memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 
-			//SHARD: drop CV destinations outside the channel range
-			for(i=0;i<NUM_MOD_SLOTS;i++)
-			{
-				if(para[PAR_CV_DEST_1+i] >= SH_NUM_MOD_DESTS)
-					para[PAR_CV_DEST_1+i] = 0;
-			}
+			//SHARD: convert older kit formats, drop invalid CV destinations
+			sh_kitFixup(para);
 		}
 
 
@@ -250,6 +248,11 @@ FRESULT preset_LoadTmpKit()
 		f_open((FIL*)&SDFile,"perf.tmp",FA_OPEN_EXISTING | FA_READ);
 		f_read((FIL*)&SDFile, &para[PAR_MORPH],1, &bytesRead);
 		f_read((FIL*)&SDFile, &para[PAR_MORPH_TARGET],1, &bytesRead);
+		//SHARD: morph algorithm and sharpness (missing in older files)
+		if(f_read((FIL*)&SDFile, &para[PAR_SH_MORPH_ALG],1, &bytesRead) != FR_OK || bytesRead != 1)
+			para[PAR_SH_MORPH_ALG] = SH_MORPH_DEFAULT_ALG;
+		if(f_read((FIL*)&SDFile, &para[PAR_SH_MORPH_SHP],1, &bytesRead) != FR_OK || bytesRead != 1)
+			para[PAR_SH_MORPH_SHP] = SH_MORPH_DEFAULT_SHP;
 		f_close((FIL*)&SDFile);
 
 		// update the soundengine with the new parameters
@@ -923,7 +926,6 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr)
 #if USE_SD_CARD		
 	//read the file content
 	unsigned int bytesRead=1;
-	int16_t i;
 	uint8_t *para;
 	bytesRead = 0;
 	
@@ -935,12 +937,8 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr)
 		if(END_OF_SOUND_PARAMETERS-bytesRead)
 			memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 		
-		//SHARD: drop CV destinations outside the channel range
-		for(i=0;i<NUM_MOD_SLOTS;i++)
-		{
-			if(para[PAR_CV_DEST_1+i] >= SH_NUM_MOD_DESTS)
-				para[PAR_CV_DEST_1+i] = 0;
-		}
+		//SHARD: convert older kit formats, drop invalid CV destinations
+		sh_kitFixup(para);
 
 
 	}
@@ -1038,7 +1036,7 @@ closeFile:
 //----------------------------------------------------
 //val is interpolation value between 0 and 255
 //uses bankers rounding
-static uint8_t interpolate(uint8_t a, uint8_t b, uint8_t x)
+static __attribute__((unused)) uint8_t interpolate(uint8_t a, uint8_t b, uint8_t x)
 {
 	uint16_t fixedPointValue = (uint16_t)(((a*256) + (b-a)*x));
 	uint8_t result = (uint8_t)(fixedPointValue/256);
@@ -1811,24 +1809,29 @@ FRESULT preset_loadPatternRAM(uint8_t presetNr)
 //called periodically to process non blocking morph
 void preset_morph_tick()
 {
-	if(morph_state)
+	//SHARD: channel parameters, FX dry/wet and P1..P4 follow the morph in the
+	//audio block (Shard/sh_bridge.c). Here the FX switches (type, routing,
+	//distortion type, ...) are checked, one per call, and sent when the
+	//morphed value changes. They switch where the morph curve passes the
+	//middle.
+	static uint8_t sent[PAR_FX_DELAY_TYPE - PAR_FX_TYPE + 1];
+	static uint8_t valid;
+	if(morph_index < PAR_FX_TYPE || morph_index > PAR_FX_DELAY_TYPE)
+		morph_index = PAR_FX_TYPE;
+	const uint16_t p = morph_index++;
+	if(p == PAR_FX_DRY_WET || (p >= PAR_FX_P1 && p <= PAR_FX_P4)) return;
+
+	const uint8_t val = sh_morphActive()
+			? sh_morphStepped(activeParameters[p], mainParameters[sh_morphKitNr()][p], p)
+			: activeParameters[p];
+	const uint8_t i = (uint8_t)(p - PAR_FX_TYPE);
+	if(!(valid & 1) || sent[i] != val)
 	{
-		//SHARD: channel parameters are interpolated in the strips (sh_channelsMorph),
-		//here only the FX bus parameters are updated, one per call
-		if(morph_index < PAR_FX_TYPE || morph_index > PAR_FX_DELAY_TYPE)
-			morph_index = PAR_FX_TYPE;
-
-		const uint8_t val = interpolate(activeParameters[morph_index],
-				mainParameters[activeParameters[PAR_MORPH_TARGET]][morph_index], preset_morphValue);
-		midiParser_setFxParam(morph_index, val);
-
-		morph_index++;
-		if(morph_index > PAR_FX_DELAY_TYPE)
-		{
-			//finished morphing
-			morph_state = 0;
-		}
+		sent[i] = val;
+		midiParser_setFxParam(p, val);
 	}
+	if(p == PAR_FX_DELAY_TYPE) valid = 1;
+	(void)morph_state;
 }
 //----------------------------------------------------
 // This will determine an interpolated value between parameters
@@ -1852,7 +1855,8 @@ void preset_morph(uint8_t morph, uint8_t forceResetIndex)
 	//initialize new morph
 	preset_morphValue = morph;
 	morph_state = 1; //start morph
-	sh_morphSet(morph ? mainParameters[activeParameters[PAR_MORPH_TARGET]] : 0, morph);
+	//SHARD: channels and continuous FX parameters follow the morph every audio
+	//block (sh_cvProcess), the tick below handles the FX switches
 
 #else
 	int i;
@@ -1889,7 +1893,9 @@ void preset_morph(uint8_t morph, uint8_t forceResetIndex)
 //----------------------------------------------------
 uint8_t preset_getMorphValue(uint16_t index, uint8_t morph)
 {
-	return interpolate(activeParameters[index],mainParameters[activeParameters[PAR_MORPH_TARGET]][index],morph);
+	//SHARD: same curve as the sound (algorithm, sharpness, CV on the morph)
+	if(morph == 0) return activeParameters[index];
+	return sh_morphParamValue(index);
 };
 //----------------------------------------------------
 #if !EURORACK_MODULE

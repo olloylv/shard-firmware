@@ -37,7 +37,16 @@ void sh_channelRender(uint8_t ch, int16_t* buf);
 
 /* morph towards another kit: target points to channel 1 of that kit's
  * parameters (same layout as the live ones), amount 0..255, 0 = off */
-void sh_channelsMorph(const uint8_t* target, uint8_t amount);
+/* morph target: channel 1 block of the target kit, or NULL. The amount and
+ * curve are set with sh_morphSetup() (sh_morph.h). */
+void sh_channelsMorph(const uint8_t* target);
+
+/* peak level meter (screensaver): enable, then read and reset per frame */
+void sh_meterEnable(uint8_t on);
+
+/* 1 for list parameters (switch instead of interpolating when morphing) */
+uint8_t sh_isSteppedLocal(uint8_t local, uint8_t engine);
+uint16_t sh_meterTake(uint8_t ch);
 
 /* mixer helpers */
 uint8_t sh_channelRouting(uint8_t ch);

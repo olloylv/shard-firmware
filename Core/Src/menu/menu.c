@@ -367,6 +367,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 		/*PAR_STEP_SHIFT*/		DTYPE_MENU | (MENU_STEP_SHIFT<<8),
 	    /*PAR_SH_UPDATE*/		DTYPE_SH,
 	    /*PAR_SH_CPU*/			DTYPE_SH,
+	    /*PAR_SH_MORPH_ALG*/	DTYPE_SH,
+	    /*PAR_SH_MORPH_SHP*/	DTYPE_SH,
 	    /*PAR_BPM*/ 			DTYPE_0B255,							//251
 	    /*PAR_MIDI_CHAN_1*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_2*/ 	DTYPE_1B16,
@@ -856,7 +858,9 @@ void menu_tick()
 
 
 
-	sendDisplayBuffer();
+	//SHARD: the screensaver owns the LCD while it runs
+	if(!screensaver_Active)
+		sendDisplayBuffer();
 }
 //-----------------------------------------------------------------
 void menu_repaintAll()
@@ -2856,6 +2860,13 @@ static void menu_encoderChangeParameter(int8_t inc)
 
 	paramValue = &activeParameters[paramNr];
 
+	//SHARD: CV destinations skip the slots the selected engine doesn't use
+	if((parameter_dtypes[paramNr] & 0xFF) == DTYPE_TARGET_SELECTION_CV)
+	{
+		*paramValue = shui_modDestStep(*paramValue, inc);
+		return;
+	}
+
 	//increase parameter value
 	if(inc>0) //positive increase
 	{
@@ -3740,7 +3751,7 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 		if(newValue > shui_maxValue(paramNr)) newValue = shui_maxValue(paramNr);
 		break;
 	case DTYPE_TARGET_SELECTION_CV:
-		if(newValue >= SH_NUM_MOD_DESTS) newValue = SH_NUM_MOD_DESTS - 1;
+		newValue = shui_modDestStep(originalValue, diff);
 		break;
 
 	case DTYPE_0B255:

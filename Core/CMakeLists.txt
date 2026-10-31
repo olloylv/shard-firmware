@@ -114,6 +114,7 @@ add_library(lxr_midi OBJECT
 add_library(lxr_shard OBJECT
     Src/Shard/sh_channel.c
     Src/Shard/sh_bridge.c
+    Src/Shard/sh_morph.c
     Src/Shard/sh_ui.c
     Src/Shard/sh_update.c
     Src/Shard/engines/engines.cc

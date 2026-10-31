@@ -169,6 +169,8 @@ enum ParamEnums
 	//#########################################
 	PAR_SH_UPDATE,					// SHARD: firmware update from the SD card (menu action)
 	PAR_SH_CPU,						// SHARD: audio CPU load display
+	PAR_SH_MORPH_ALG,				// SHARD: morph algorithm (sh_morph.h)
+	PAR_SH_MORPH_SHP,				// SHARD: morph sharpness
 	PAR_BEGINNING_OF_GLOBALS, //a placeholder to mark the beginning of the global var space not present in morph and not needed in the seq
 	//global params
 	PAR_BPM = PAR_BEGINNING_OF_GLOBALS,	/*250*/

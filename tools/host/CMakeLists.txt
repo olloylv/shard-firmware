@@ -22,6 +22,7 @@ add_executable(shard_render
   host_stubs.c
   # SHARD
   ${CORE}/Src/Shard/sh_channel.c
+  ${CORE}/Src/Shard/sh_morph.c
   ${CORE}/Src/Shard/engines/engines.cc
   ${CORE}/Src/Shard/engines/lxr_engines.cc
   ${CORE}/Src/Shard/engines/plaits_engines.cc

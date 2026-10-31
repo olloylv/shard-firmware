@@ -17,7 +17,7 @@
 #define SH_SD_ROOT "/shard"
 
 /* kit format version, stored in parameter 0 (PAR_NONE) of every kit */
-#define SH_KIT_VERSION 1
+#define SH_KIT_VERSION 2
 
 /* a sound parameter was changed (menu, morph, kit load). fromUser = 1 when it
  * was edited on the front panel; changing the engine by hand then loads the
@@ -36,8 +36,14 @@ void sh_buildInitKit(uint8_t* para);
 /* CV matrix, once per audio block (called from CV_process) */
 void sh_cvProcess(void);
 
-/* morph towards another kit (amount 0..255, 0 = off) */
-void sh_morphSet(const uint8_t* targetKit, uint8_t amount);
+/* kit number the morph currently points to (morph target + CV) */
+uint8_t sh_morphKitNr(void);
+
+/* value of a sound parameter in the current morph (used by "save morph") */
+uint8_t sh_morphParamValue(uint16_t paramNr);
+
+/* check a kit after loading it; converts older kit formats */
+void sh_kitFixup(uint8_t* para);
 
 /* audio CPU load */
 void sh_cpuBlockStart(void);

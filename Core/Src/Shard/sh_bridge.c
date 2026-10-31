@@ -8,6 +8,7 @@
 #include "Shard/sh_bridge.h"
 #include "Shard/sh_channel.h"
 #include "Shard/sh_engine.h"
+#include "Shard/sh_morph.h"
 #include "Parameters.h"
 
 #include <string.h>
@@ -18,9 +19,23 @@
 #include "Soundengine/TriggerProcessor.h"
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/ModMatrix_Processor.h"
+#include "Soundengine/FxBus.h"
+#else
+#define NUM_MOD_SLOTS 18
 #endif
 
 extern uint8_t activeParameters[];
+extern uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];
+
+/* FX parameters that are morphed and modulated every audio block */
+static const uint16_t fxCont[5] = { PAR_FX_DRY_WET, PAR_FX_P1, PAR_FX_P2, PAR_FX_P3, PAR_FX_P4 };
+static float fxLast[5] = { -1.f, -1.f, -1.f, -1.f, -1.f };
+static volatile uint8_t morphKitNr;
+
+static uint8_t isContFx(uint16_t paramNr)
+{
+	return paramNr == PAR_FX_DRY_WET || (paramNr >= PAR_FX_P1 && paramNr <= PAR_FX_P4);
+}
 
 //------------------------------------------------------------------------
 uint8_t sh_engineFind(const char* shortName)
@@ -43,7 +58,8 @@ void sh_paramChanged(uint16_t paramNr, uint8_t fromUser)
 		return;
 	}
 #ifndef SHARD_HOST
-	if(paramNr >= PAR_FX_TYPE && paramNr <= PAR_FX_DELAY_TYPE)
+	/* dry/wet and P1..P4 are applied by the audio block (morph + CV) */
+	if(paramNr >= PAR_FX_TYPE && paramNr <= PAR_FX_DELAY_TYPE && !isContFx(paramNr))
 		midiParser_setFxParam(paramNr, activeParameters[paramNr]);
 #endif
 	/* CV matrix parameters are read every block by sh_cvProcess() */
@@ -59,8 +75,51 @@ void sh_applyKit(void)
 {
 #ifndef SHARD_HOST
 	for(uint16_t p = PAR_FX_TYPE; p <= PAR_FX_DELAY_TYPE; p++)
-		midiParser_setFxParam(p, activeParameters[p]);
+		if(!isContFx(p)) midiParser_setFxParam(p, activeParameters[p]);
 #endif
+	for(uint8_t i = 0; i < 5; i++) fxLast[i] = -1.f;
+}
+
+//------------------------------------------------------------------------
+/* channel targets of kit format 1 (42 per channel, no global targets) */
+static const uint8_t modTargetLocalV1[42] =
+{
+	SH_MODT_VOCT,
+	SHP_E0 + 0,  SHP_E0 + 1,  SHP_E0 + 2,  SHP_E0 + 3,  SHP_E0 + 4,
+	SHP_E0 + 5,  SHP_E0 + 6,  SHP_E0 + 7,  SHP_E0 + 8,  SHP_E0 + 9,
+	SHP_E0 + 10, SHP_E0 + 11, SHP_E0 + 12, SHP_E0 + 13, SHP_E0 + 14,
+	SHP_E0 + 15, SHP_E0 + 16, SHP_E0 + 17, SHP_E0 + 18, SHP_E0 + 19,
+	SHP_E0 + 20, SHP_E0 + 21, SHP_E0 + 22, SHP_E0 + 23, SHP_E0 + 24,
+	SHP_E0 + 25, SHP_E0 + 26, SHP_E0 + 27, SHP_E0 + 28,
+	SHP_ATTACK, SHP_DECAY, SHP_SLOPE,
+	SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_DRIVE,
+	SHP_VOL, SHP_PAN, SHP_SRATE, SHP_DRIVE, SHP_BITS,
+	SHP_LFO_FREQ,
+};
+
+void sh_kitFixup(uint8_t* para)
+{
+	if(para[PAR_NONE] < 2)
+	{
+		/* format 1 -> 2: new CV destination numbers */
+		for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
+		{
+			const uint8_t d = para[PAR_CV_DEST_1 + i];
+			uint8_t nd = 0;
+			if(d >= 1 && d <= SH_NUM_CHANNELS * 42)
+			{
+				const uint8_t ch = (uint8_t)((d - 1) / 42);
+				const uint8_t local = modTargetLocalV1[(d - 1) % 42];
+				for(uint8_t t = 0; t < SH_MOD_TARGETS_PER_CH; t++)
+					if(sh_modTargetLocal[t] == local) { nd = sh_modDestMake(ch, t); break; }
+			}
+			para[PAR_CV_DEST_1 + i] = nd;
+		}
+		para[PAR_NONE] = SH_KIT_VERSION;
+	}
+	for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
+		if(para[PAR_CV_DEST_1 + i] >= SH_NUM_MOD_DESTS)
+			para[PAR_CV_DEST_1 + i] = 0;
 }
 
 //------------------------------------------------------------------------
@@ -100,8 +159,70 @@ static float cvToSemitones(float val)
 	return oct * 12.f + (val - calibration[oct]) / steps;
 }
 
+static inline float clampf01(float x) { return x < 0.f ? 0.f : (x > 1.f ? 1.f : x); }
+
+/* morph and the continuous FX parameters, once per audio block */
+static void morphAndFxBlock(const float* g)
+{
+	const uint8_t amount = (uint8_t)(clampf01(activeParameters[PAR_MORPH] / 255.f + g[SH_MODG_MORPH]) * 255.f + 0.5f);
+	const float tm = g[SH_MODG_MTARGET] * 127.f;
+	int target = activeParameters[PAR_MORPH_TARGET] + (int)(tm < 0.f ? tm - 0.5f : tm + 0.5f);
+	target = target < 0 ? 0 : (target >= NUM_KIT_SLOTS ? NUM_KIT_SLOTS - 1 : target);
+	const uint8_t shp = (uint8_t)(clampf01(activeParameters[PAR_SH_MORPH_SHP] / 127.f + g[SH_MODG_MSHAPE]) * 127.f + 0.5f);
+
+	sh_morphSetup(amount, activeParameters[PAR_SH_MORPH_ALG], shp);
+	morphKitNr = (uint8_t)target;
+	const uint8_t* kit = mainParameters[target];
+	sh_channelsMorph(amount ? &kit[PAR_CH_BASE] : 0);
+
+	for(uint8_t k = 0; k < 5; k++)
+	{
+		const uint16_t par = fxCont[k];
+		const uint8_t maxv = k == 0 ? 100 : 127;
+		const uint8_t base = amount ? sh_morphContinuous(activeParameters[par], kit[par], par, maxv) : activeParameters[par];
+		const float v = clampf01(base / (float)maxv + g[SH_MODG_FX_WET + k]);
+		const float d = v - fxLast[k];
+		if(d > 0.002f || d < -0.002f)
+		{
+			fxLast[k] = v;
+#ifndef SHARD_HOST
+			if(k == 0) fxBus.dryWet = v;
+			else FxBus_setParameter((uint8_t)(k - 1), v);
+#endif
+		}
+	}
+}
+
+uint8_t sh_morphKitNr(void)
+{
+	return morphKitNr;
+}
+
+uint8_t sh_morphParamValue(uint16_t paramNr)
+{
+	const uint8_t src = activeParameters[paramNr];
+	if(!sh_morphActive() || paramNr >= END_OF_SOUND_PARAMETERS) return src;
+	const uint8_t* kit = mainParameters[morphKitNr];
+	const uint8_t dst = kit[paramNr];
+	uint8_t ch, local;
+	if(par_isChannelParam(paramNr, &ch, &local))
+	{
+		if(local == SHP_OUT) return src;
+		const uint16_t e = PAR_CH(ch, SHP_ENGINE);
+		if(activeParameters[e] != kit[e])
+			return sh_morphStepped(0, 1, e) ? dst : src;
+		if(sh_isSteppedLocal(local, activeParameters[e]))
+			return sh_morphStepped(src, dst, paramNr);
+		return sh_morphContinuous(src, dst, paramNr, 127);
+	}
+	if(isContFx(paramNr))
+		return sh_morphContinuous(src, dst, paramNr, paramNr == PAR_FX_DRY_WET ? 100 : 127);
+	return sh_morphStepped(src, dst, paramNr);
+}
+
 void sh_cvProcess(void)
 {
+	float g[SH_MOD_GLOBALS] = { 0 };
 #ifndef SHARD_HOST
 	for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
 	{
@@ -115,6 +236,13 @@ void sh_cvProcess(void)
 		if(src < 5)       cv = adc_getCvValue(src);
 		else if(src < 11) cv = sh_lfoValue((uint8_t)(src - 5));
 		else              cv = Trigger_getAccent((uint8_t)(src - 11)) / 127.f;
+
+		if(sh_modDestIsGlobal(dest))
+		{
+			/* bipolar around the stored value */
+			g[sh_modDestGlobal(dest)] += amount * (cv * 2.f - 1.f);
+			continue;
+		}
 
 		const uint8_t ch = sh_modDestChannel(dest);
 		const uint8_t local = sh_modDestLocal(dest);
@@ -132,12 +260,7 @@ void sh_cvProcess(void)
 		}
 	}
 #endif
-}
-
-//------------------------------------------------------------------------
-void sh_morphSet(const uint8_t* targetKit, uint8_t amount)
-{
-	sh_channelsMorph(targetKit ? &targetKit[PAR_CH_BASE] : 0, amount);
+	morphAndFxBlock(g);
 }
 
 //------------------------------------------------------------------------

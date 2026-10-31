@@ -19,6 +19,7 @@
 #include "encoder.h"
 #include "IO/adcPots.h"
 #include "Preset/PresetManager.h"
+#include "Shard/sh_morph.h"
 #include "Shard/sh_bridge.h"
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/DSPAudio/random.h"
@@ -397,6 +398,8 @@ if(sd_card_ok)
 		//init morph target to peset 0
 		//morphParameters = mainParameters[0];
 		activeParameters[PAR_MORPH_TARGET] = 0;
+		activeParameters[PAR_SH_MORPH_ALG] = SH_MORPH_DEFAULT_ALG;
+		activeParameters[PAR_SH_MORPH_SHP] = SH_MORPH_DEFAULT_SHP;
 	}
 
 if(sd_card_ok)

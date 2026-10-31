@@ -34,6 +34,6 @@ void paramToModTargetInit() { }
 
 uint8_t voiceFromModTargValue(uint8_t val)
 {
-	if(val == 0 || val >= SH_NUM_MOD_DESTS) return 0;
+	if(val < SH_MOD_CH_BASE || val >= SH_NUM_MOD_DESTS) return 0;
 	return (uint8_t)(sh_modDestChannel(val) + 1);
 }

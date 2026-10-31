@@ -3,14 +3,26 @@
 
     python3 tools/kits/make_kits.py <shard_render> <out dir>
 
-Writes <out dir>/shard/prj00/NN-NAME.snd (the module's kit files) and, for each
-kit, renders a genre pattern with the desktop build to measure the channel
-levels; channel volumes are then adjusted so that all kits are gain staged the
-same way (kick loudest, hats quieter). Demo WAVs are written to <out dir>/demo.
+Writes <out dir>/shard/prj00/NNN-NAME.snd (the module's kit files),
+<out dir>/bank.txt and demo WAVs in <out dir>/demo.
 
-Channel roles are the same in every kit:
+The bank is grouped by the engines that dominate a kit:
+
+      0 -  31  MD     Machinedrum style engines (tBD tSD tCP tHH EFM GND)
+     32 -  63  PL     Plaits engines (aBD sBD aSD sSD pHH Mdl Str Prt)
+     64 -  95  ID     IDM / glitch engines (Zap Crs Byt Rng Cmb)
+     96 - 111  LX     original LXR voices (Drm Snr Cym Hat)
+    112 - 127  HY     hybrids, free mix of all families
+
+At least four of the six channels of a kit come from its family. Channel
+roles are the same in every kit:
     1 kick   2 snare   3 clap   4 perc / tom   5 perc / metal / fx
     6 hats   (trigger 7 = open hat on channel 6)
+
+Every kit is checked with single hits of each channel (tools/kits/analyse.py):
+sounds that ring too long, high tones that sustain (whistles) and long high
+frequency tails are shortened until they pass. Then the channel volumes are
+gain staged with a rendered pattern.
 
 SPDX-License-Identifier: GPL-3.0-only
 """
@@ -19,6 +31,9 @@ import os
 import random
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from analyse import analyse  # noqa: E402
 
 RENDER = sys.argv[1]
 OUT = sys.argv[2]
@@ -38,10 +53,19 @@ OUTS = {"st1": 0, "st2": 1, "l1": 2, "r1": 3, "l2": 4, "r2": 5, "fx": 6}
 LFO = {"sin": 0, "tri": 1, "sup": 2, "sdn": 3, "sqr": 4, "rnd": 5, "xup": 6, "xdn": 7}
 FX = {"off": 0, "drv": 1, "rng": 2, "cmp": 3, "del": 4}
 
+FAMILY = {
+    "MD": {"tBD", "tSD", "tCP", "tHH", "EFM", "GND"},
+    "PL": {"aBD", "sBD", "aSD", "sSD", "pHH", "Mdl", "Str", "Prt"},
+    "ID": {"Zap", "Crs", "Byt", "Rng", "Cmb"},
+    "LX": {"Drm", "Snr", "Cym", "Hat"},
+}
+
 # --- CV matrix destinations --------------------------------------------------
 MT = T["mod_target_local"]
 MTPC = T["mod_targets_per_ch"]
+MCB = T["mod_ch_base"]
 VOCT = 0xFF
+GLOBAL = {"mrp": 1, "mtg": 2, "msh": 3, "fwt": 4, "fx1": 5, "fx2": 6, "fx3": 7, "fx4": 8}
 
 
 def mod_dest(ch, local=None, engine_slot=None, voct=False):
@@ -51,7 +75,7 @@ def mod_dest(ch, local=None, engine_slot=None, voct=False):
         t = MT.index(L["E0"] + engine_slot)
     else:
         t = MT.index(L[local])
-    return 1 + ch * MTPC + t
+    return MCB + ch * MTPC + t
 
 
 def eslot(engine, short):
@@ -59,6 +83,10 @@ def eslot(engine, short):
         if p["short"] == short:
             return p
     raise KeyError(f"{engine} has no parameter {short}")
+
+
+def has(engine, short):
+    return any(p["short"] == short for p in ENG[engine]["params"])
 
 
 # --- channel / kit model -------------------------------------------------------
@@ -69,16 +97,18 @@ class Channel:
         if tune is not None:
             self.block[L["TUNE"]] = tune
         self.set(**strip)
-        self.role = None
 
     def p(self, **kw):
         """engine parameters by short name (lists: index or label)"""
         for k, v in kw.items():
             d = eslot(self.engine, k)
             if isinstance(v, str):
-                v = [x.strip().lower() for x in d["labels"]].index(v.lower())
+                v = [x.strip().lower() for x in d["labels"]].index(v.strip().lower())
             self.block[L["E0"] + d["slot"]] = int(max(0, min(127, v)))
         return self
+
+    def get(self, k):
+        return self.block[L["E0"] + eslot(self.engine, k)["slot"]]
 
     def set(self, **kw):
         for k, v in kw.items():
@@ -94,20 +124,28 @@ class Channel:
             self.block[L[key]] = int(max(0, min(127, v)))
         return self
 
+    def s(self, k):
+        return self.block[L[k.upper()]]
+
+    def aeg_on(self):
+        return self.block[L["AEG_MODE"]] == 0
+
 
 class Kit:
-    def __init__(self, name, genre, bpm):
+    def __init__(self, name, family, flavor, bpm):
         self.name = name[:8]
-        self.genre = genre
+        self.family = family
+        self.flavor = flavor
         self.bpm = bpm
         self.ch = []
         self.fx = {"type": "off", "routing": "st1", "drywet": 50, "p": [64, 64, 64, 64],
                    "dist": 0, "ratio": 3, "wave": 0, "delay": 0}
         self.cv = []   # (ch, slot 0..2, src, amount, dest)
+        self.notes = []
 
     def params(self):
         par = [0] * T["end_of_sound"]
-        par[0] = 1   # SH_KIT_VERSION
+        par[0] = 2   # SH_KIT_VERSION
         for i, c in enumerate(self.ch):
             for k, v in enumerate(c.block):
                 par[BASE + i * STRIDE + k] = v
@@ -121,8 +159,8 @@ class Kit:
         par[P["FX_RATIO"]] = f["ratio"]
         par[P["FX_WAVE"]] = f["wave"]
         par[P["FX_DELAY_TYPE"]] = f["delay"]
-        # CV matrix: slot 1 and 2 of every channel are ready for the CV inputs
-        # (amount 0, so they do nothing until the amount is raised)
+        # CV matrix: slot 1 = V/Oct, slot 2 = decay, both at amount 0, ready
+        # for the CV inputs; slot 3 is used for internal movement
         for ch in range(6):
             for s in range(3):
                 i = ch * 3 + s
@@ -138,11 +176,16 @@ class Kit:
             par[P["CV_DEST_1"] + i] = dest
         return par
 
-    def lfo_mod(self, ch, dest, amount, wave="rnd", freq=40, slot=2):
-        """internal movement: channel LFO -> parameter (CV matrix slot 3)"""
-        c = self.ch[ch]
-        c.set(lfo_wave=wave, lfo_freq=freq)
-        self.cv.append((ch, slot, 5 + ch, amount, dest))
+    def lfo_mod(self, ch, dest, amount, wave="rnd", freq=40, retrig=0):
+        """channel LFO -> any destination (CV matrix slot 3 of that channel)"""
+        self.cv = [c for c in self.cv if c[0] != ch]
+        self.ch[ch].set(lfo_wave=wave, lfo_freq=freq, lfo_retrig=retrig)
+        self.cv.append((ch, 2, 5 + ch, amount, dest))
+
+    def lfo_free(self, rng, avoid=()):
+        used = {c[0] for c in self.cv}
+        free = [c for c in range(6) if c not in used and c not in avoid]
+        return rng.choice(free) if free else None
 
     def write(self, path):
         name = self.name.ljust(8)[:8].encode("ascii")
@@ -155,373 +198,594 @@ def r(rng, lo, hi):
     return rng.randint(lo, hi)
 
 
+def pick(rng, *opts):
+    return rng.choice(opts)
+
+
 # =============================================================================
-# role recipes
+# role recipes, per family. Everything is tuned short and punchy; the check
+# after building a kit shortens whatever still rings.
 # =============================================================================
-def kick(rng, style):
-    if style == "808":
-        return Channel("aBD", r(rng, 29, 36)).p(Ton=r(rng, 25, 60), Dec=r(rng, 70, 110),
-                                                AFM=r(rng, 20, 60), SFM=r(rng, 10, 40), Drv=r(rng, 0, 30))
-    if style == "909":
-        return Channel("tBD", r(rng, 30, 36)).p(Swp=r(rng, 40, 62), SwD=r(rng, 22, 45), Dec=r(rng, 38, 62),
-                                                Hld=r(rng, 0, 20), Clk=r(rng, 30, 70), Drv=r(rng, 15, 45))
-    if style == "rumble":
-        return Channel("tBD", r(rng, 28, 33)).p(Swp=r(rng, 30, 50), SwD=r(rng, 30, 50), Dec=r(rng, 70, 95),
-                                                Hld=r(rng, 10, 40), Clk=r(rng, 10, 40), Drv=r(rng, 40, 80))
-    if style == "synth":
-        return Channel("sBD", r(rng, 30, 38)).p(Ton=r(rng, 40, 80), Dec=r(rng, 40, 80), Drt=r(rng, 10, 60),
-                                                FMA=r(rng, 30, 80), FMD=r(rng, 20, 60))
-    if style == "dirty":
-        return Channel("sBD", r(rng, 29, 35)).p(Ton=r(rng, 60, 100), Dec=r(rng, 50, 80), Drt=r(rng, 60, 110),
-                                                FMA=r(rng, 50, 100), FMD=r(rng, 30, 70)).set(drive=r(rng, 30, 70))
-    if style == "lxr":
-        return Channel("Drm", r(rng, 33, 40)).p(Wav="Sin", PDc=r(rng, 25, 45), PSl=r(rng, 40, 70),
-                                               PAm=r(rng, 35, 60), FMA=0, TrW="Kik", TrV=r(rng, 30, 70),
-                                               TrF=r(rng, 20, 40)).set(decay=r(rng, 26, 40), slope=r(rng, 20, 40))
+# ---- MD style ---------------------------------------------------------------
+def md_kick(rng, style):
+    if style == "punch":
+        return Channel("tBD", r(rng, 31, 36)).p(Swp=r(rng, 50, 72), SwD=r(rng, 18, 32), Dec=r(rng, 30, 48),
+                                                Hld=r(rng, 0, 12), Clk=r(rng, 50, 90), Drv=r(rng, 25, 55))
     if style == "click":
-        return Channel("tBD", r(rng, 34, 40)).p(Swp=r(rng, 55, 80), SwD=r(rng, 10, 25), Dec=r(rng, 20, 38),
-                                                Hld=0, Clk=r(rng, 60, 100), Drv=r(rng, 0, 30))
+        return Channel("tBD", r(rng, 34, 40)).p(Swp=r(rng, 60, 85), SwD=r(rng, 8, 20), Dec=r(rng, 18, 32),
+                                                Hld=0, Clk=r(rng, 80, 120), Drv=r(rng, 10, 40))
+    if style == "heavy":
+        return Channel("tBD", r(rng, 29, 33)).p(Swp=r(rng, 45, 62), SwD=r(rng, 22, 38), Dec=r(rng, 45, 62),
+                                                Hld=r(rng, 10, 30), Clk=r(rng, 40, 70), Drv=r(rng, 60, 100)).set(drive=r(rng, 10, 40))
     if style == "efm":
-        return Channel("EFM", r(rng, 30, 36)).p(Rat="1", Mod=r(rng, 20, 50), MDc=r(rng, 15, 35), FB=r(rng, 0, 30),
-                                                Swp=r(rng, 50, 80), SwD=r(rng, 20, 40), Dec=r(rng, 40, 70), Noi=0)
-    raise ValueError(style)
-
-
-def snare(rng, style):
-    if style == "808":
-        return Channel("aSD", r(rng, 48, 56)).p(Ton=r(rng, 40, 80), Dec=r(rng, 30, 60), Snp=r(rng, 60, 100))
-    if style == "909":
-        return Channel("tSD", r(rng, 50, 57)).p(Bdy=r(rng, 70, 100), Snp=r(rng, 80, 115), Dec=r(rng, 30, 50),
-                                                NDc=r(rng, 40, 65), Swp=r(rng, 25, 50), NTn=r(rng, 60, 90))
-    if style == "synth":
-        return Channel("sSD", r(rng, 48, 58)).p(FMA=r(rng, 20, 70), Dec=r(rng, 35, 65), Snp=r(rng, 50, 100))
-    if style == "noise":
-        return Channel("Crs", r(rng, 55, 70)).p(Src="Noi", Rat=r(rng, 20, 60), Bit=r(rng, 40, 90),
-                                               Jit=r(rng, 0, 40), Dec=r(rng, 45, 70), Glt=0)
-    if style == "lxr":
-        return Channel("Snr", r(rng, 50, 58)).p(Wav="Tri", Noi=r(rng, 90, 120), NFF=r(rng, 80, 110),
-                                               NFR=r(rng, 10, 40), NFT="HP", PDc=r(rng, 30, 50), PAm=r(rng, 20, 40),
-                                               Mix=r(rng, 60, 95)).set(decay=r(rng, 16, 28), slope=r(rng, 20, 40))
-    if style == "rim":
-        return Channel("Mdl", r(rng, 64, 76)).p(Str=r(rng, 10, 40), Bri=r(rng, 70, 110), Dmp=r(rng, 20, 45), Exc=r(rng, 20, 60))
-    if style == "efm":
-        return Channel("EFM", r(rng, 52, 60)).p(Rat=rng.choice(["1.4", "2.7", "3.1", "5.2"]), Mod=r(rng, 60, 100),
-                                                MDc=r(rng, 25, 45), FB=r(rng, 20, 60), Swp=r(rng, 20, 45),
-                                                SwD=r(rng, 20, 35), Dec=r(rng, 30, 50), Noi=r(rng, 60, 110))
-    raise ValueError(style)
-
-
-def clap(rng, style):
-    if style == "909":
-        return Channel("tCP", r(rng, 88, 100)).p(Dec=r(rng, 35, 60), Spc=r(rng, 35, 60), Num=r(rng, 2, 4),
-                                                 Q=r(rng, 15, 45), Rnd=r(rng, 15, 45))
-    if style == "tight":
-        return Channel("tCP", r(rng, 94, 108)).p(Dec=r(rng, 15, 35), Spc=r(rng, 20, 40), Num=r(rng, 1, 3),
-                                                 Q=r(rng, 30, 60), Rnd=r(rng, 0, 30))
-    if style == "wide":
-        return Channel("tCP", r(rng, 82, 96)).p(Dec=r(rng, 60, 90), Spc=r(rng, 55, 80), Num=r(rng, 4, 7),
-                                                Q=r(rng, 10, 30), Rnd=r(rng, 40, 80))
-    if style == "lxr":
-        return Channel("Snr", r(rng, 60, 70)).p(Wav="Noi", Noi=r(rng, 100, 127), NFF=r(rng, 80, 100), NFR=r(rng, 0, 20),
-                                               NFT="BP", Mix=r(rng, 100, 127)).set(repeat=r(rng, 2, 4), attack=r(rng, 6, 14), drive=r(rng, 30, 60),
-                                                                                    decay=r(rng, 22, 34), slope=25)
-    raise ValueError(style)
-
-
-def hats(rng, style):
-    if style == "808":
-        return Channel("pHH", r(rng, 66, 80)).p(Ton=r(rng, 50, 90), Dec=r(rng, 15, 35), Noi=r(rng, 20, 60),
-                                                Typ="808", Opn=r(rng, 75, 100))
-    if style == "ring":
-        return Channel("pHH", r(rng, 70, 84)).p(Ton=r(rng, 60, 100), Dec=r(rng, 10, 30), Noi=r(rng, 10, 50),
-                                                Typ="Rng", Opn=r(rng, 70, 95))
-    if style == "909":
-        return Channel("tHH", r(rng, 76, 90)).p(Ton=r(rng, 55, 85), Dec=r(rng, 12, 30), Mtl=r(rng, 60, 100),
-                                                Opn=r(rng, 70, 95), Res=r(rng, 10, 40))
-    if style == "noise":
-        return Channel("tHH", r(rng, 80, 96)).p(Ton=r(rng, 70, 100), Dec=r(rng, 14, 28), Mtl=r(rng, 0, 30),
-                                                Opn=r(rng, 60, 85), Res=r(rng, 0, 30))
-    if style == "lxr":
-        return Channel("Hat", r(rng, 80, 92)).p(Wav="Rec", MF1=r(rng, 85, 105), MF2=r(rng, 95, 120), MG1=r(rng, 70, 110),
-                                               MG2=r(rng, 50, 100), MW1="Rec", MW2="Rec").set(
-            decay=r(rng, 4, 10), decay_alt=r(rng, 30, 45), filt_type="hp", filt_freq=r(rng, 68, 85), slope=20)
-    if style == "crush":
-        return Channel("Crs", r(rng, 80, 100)).p(Src="Noi", Rat=r(rng, 5, 30), Bit=r(rng, 50, 100), Jit=r(rng, 10, 50),
-                                                Dec=r(rng, 15, 35), Glt=r(rng, 0, 30)).set(decay_alt=40)
-    raise ValueError(style)
-
-
-def perc(rng, style):
-    """channels 4/5: toms, cowbells, rims, metals, zaps, glitches, ..."""
-    if style == "tom":
-        return Channel("aBD", r(rng, 43, 55)).p(Ton=r(rng, 40, 80), Dec=r(rng, 45, 75), AFM=r(rng, 10, 40),
-                                                SFM=r(rng, 0, 20), Drv=0)
-    if style == "tom909":
-        return Channel("tBD", r(rng, 45, 57)).p(Swp=r(rng, 20, 40), SwD=r(rng, 30, 50), Dec=r(rng, 40, 60),
-                                                Hld=0, Clk=r(rng, 10, 30), Drv=r(rng, 0, 20))
-    if style == "cowbell":
-        return Channel("Rng", r(rng, 70, 78)).p(Spr=r(rng, 0, 20), RM=r(rng, 0, 30), Ton=r(rng, 70, 95),
-                                                Res=r(rng, 40, 80), Wav="Sqr").set(decay=r(rng, 14, 24), slope=25)
-    if style == "metal":
-        return Channel("Rng", r(rng, 60, 80)).p(Spr=r(rng, 80, 127), RM=r(rng, 80, 127), Ton=r(rng, 85, 115),
-                                                Res=r(rng, 10, 50), Wav="Sqr").set(decay=r(rng, 28, 50), slope=30)
-    if style == "bell":
-        return Channel("Mdl", r(rng, 66, 84)).p(Str=r(rng, 70, 110), Bri=r(rng, 60, 100), Dmp=r(rng, 60, 95), Exc=r(rng, 0, 30))
-    if style == "wood":
-        return Channel("Mdl", r(rng, 60, 76)).p(Str=r(rng, 0, 30), Bri=r(rng, 40, 80), Dmp=r(rng, 15, 40), Exc=r(rng, 20, 60))
-    if style == "pluck":
-        return Channel("Str", r(rng, 45, 64)).p(Str=r(rng, 20, 80), Bri=r(rng, 50, 100), Dmp=r(rng, 40, 80), Exc=r(rng, 0, 30))
-    if style == "efmperc":
-        return Channel("EFM", r(rng, 55, 75)).p(Rat=rng.choice(["2.7", "3.1", "3.5", "5.2", "7", "11"]), Mod=r(rng, 40, 90),
-                                                MDc=r(rng, 15, 40), FB=r(rng, 0, 50), Swp=r(rng, 0, 30),
-                                                SwD=r(rng, 10, 30), Dec=r(rng, 20, 45), Noi=r(rng, 0, 30))
-    if style == "zap":
-        return Channel("Zap", r(rng, 36, 60)).p(Dep=r(rng, 70, 115), Tim=r(rng, 15, 50), FB=r(rng, 0, 60),
-                                                Dec=r(rng, 40, 80), Dir=rng.choice(["Dwn", "Dwn", "Up", "Bth"]))
-    if style == "laser":
-        return Channel("Zap", r(rng, 60, 80)).p(Dep=r(rng, 40, 80), Tim=r(rng, 40, 75), FB=r(rng, 20, 70),
-                                                Dec=r(rng, 50, 80), Dir="Dwn")
-    if style == "glitch":
-        return Channel("Crs", r(rng, 40, 80)).p(Src=rng.choice(["Sqr", "Saw", "FM"]), Rat=r(rng, 40, 90),
-                                                Bit=r(rng, 70, 115), Jit=r(rng, 30, 90), Dec=r(rng, 30, 60), Glt=r(rng, 30, 90))
-    if style == "byte":
-        return Channel("Byt", r(rng, 48, 72)).p(Frm=r(rng, 0, 7), A=r(rng, 0, 127), B=r(rng, 0, 127),
-                                                Rst=1).set(decay=r(rng, 12, 30), slope=20)
-    if style == "comb":
-        return Channel("Cmb", r(rng, 40, 70)).p(Exc=rng.choice(["Imp", "Noi", "Clk"]), FB=r(rng, 110, 124),
-                                                Dmp=r(rng, 10, 60), Bur=r(rng, 5, 40), Rat=r(rng, 0, 127),
-                                                Mx2=r(rng, 20, 80)).set(decay=r(rng, 30, 52))
-    if style == "particle":
-        return Channel("Prt", r(rng, 70, 96)).p(Den=r(rng, 40, 90), Res=r(rng, 60, 110), Spr=r(rng, 20, 80)).set(
-            decay=r(rng, 14, 32), slope=20)
+        return Channel("EFM", r(rng, 30, 36)).p(Rat=pick(rng, "1", "0.5"), Mod=r(rng, 25, 55), MDc=r(rng, 10, 25),
+                                                FB=r(rng, 0, 25), Swp=r(rng, 55, 85), SwD=r(rng, 15, 30),
+                                                Dec=r(rng, 30, 50), Noi=0)
     if style == "gnd":
-        return Channel("GND", r(rng, 60, 90)).p(Wav=rng.choice(["Imp", "S&H", "Sqr"]), Swp=r(rng, 30, 100),
-                                                SwD=r(rng, 10, 40)).set(decay=r(rng, 6, 20), slope=20)
-    if style == "lxrtom":
-        return Channel("Drm", r(rng, 45, 58)).p(Wav="Sin", PDc=r(rng, 30, 50), PAm=r(rng, 25, 45), FMA=r(rng, 0, 30),
-                                               FMF=r(rng, 64, 90), TrW="Tom", TrV=r(rng, 20, 50)).set(decay=r(rng, 26, 40), slope=30)
+        return Channel("GND", r(rng, 33, 40)).p(Wav="Sin", Swp=r(rng, 70, 110), SwD=r(rng, 12, 28)).set(
+            decay=r(rng, 16, 26), slope=r(rng, 30, 50), drive=r(rng, 20, 50))
+    raise ValueError(style)
+
+
+def md_snare(rng, style):
+    if style == "909":
+        return Channel("tSD", r(rng, 50, 57)).p(Bdy=r(rng, 60, 95), Snp=r(rng, 85, 120), Dec=r(rng, 22, 38),
+                                                NDc=r(rng, 30, 50), Swp=r(rng, 30, 55), NTn=r(rng, 60, 95))
+    if style == "tight":
+        return Channel("tSD", r(rng, 54, 62)).p(Bdy=r(rng, 40, 70), Snp=r(rng, 100, 127), Dec=r(rng, 12, 24),
+                                                NDc=r(rng, 18, 32), Swp=r(rng, 40, 70), NTn=r(rng, 80, 110)).set(drive=r(rng, 10, 40))
+    if style == "efm":
+        return Channel("EFM", r(rng, 50, 60)).p(Rat=pick(rng, "1.4", "2.7", "3.1", "5.2"), Mod=r(rng, 60, 100),
+                                                MDc=r(rng, 15, 30), FB=r(rng, 20, 60), Swp=r(rng, 20, 45),
+                                                SwD=r(rng, 15, 30), Dec=r(rng, 20, 35), Noi=r(rng, 70, 115))
+    if style == "gnd":
+        return Channel("GND", r(rng, 60, 80)).p(Wav="Noi", Swp=r(rng, 40, 80), SwD=r(rng, 10, 25)).set(
+            decay=r(rng, 12, 20), slope=r(rng, 20, 40), filt_type="bp", filt_freq=r(rng, 70, 90), filt_reso=r(rng, 10, 40))
+    raise ValueError(style)
+
+
+def md_clap(rng, style):
+    if style == "909":
+        return Channel("tCP", r(rng, 90, 100)).p(Dec=r(rng, 25, 45), Spc=r(rng, 35, 55), Num=r(rng, 2, 3),
+                                                 Q=r(rng, 15, 45), Rnd=r(rng, 15, 40))
+    if style == "tight":
+        return Channel("tCP", r(rng, 96, 110)).p(Dec=r(rng, 12, 26), Spc=r(rng, 20, 35), Num=r(rng, 1, 3),
+                                                 Q=r(rng, 30, 60), Rnd=r(rng, 0, 25))
+    if style == "crowd":
+        return Channel("tCP", r(rng, 84, 96)).p(Dec=r(rng, 30, 50), Spc=r(rng, 50, 70), Num=r(rng, 4, 6),
+                                                Q=r(rng, 10, 30), Rnd=r(rng, 40, 80))
+    raise ValueError(style)
+
+
+def md_perc(rng, style):
+    if style == "tom":
+        return Channel("tBD", r(rng, 43, 55)).p(Swp=r(rng, 25, 45), SwD=r(rng, 20, 35), Dec=r(rng, 25, 40),
+                                                Hld=0, Clk=r(rng, 20, 50), Drv=r(rng, 0, 30))
+    if style == "efmwood":
+        return Channel("EFM", r(rng, 58, 72)).p(Rat=pick(rng, "2", "3", "4", "5"), Mod=r(rng, 30, 70),
+                                                MDc=r(rng, 8, 18), FB=r(rng, 0, 30), Swp=r(rng, 10, 30),
+                                                SwD=r(rng, 8, 20), Dec=r(rng, 12, 24), Noi=r(rng, 0, 20))
+    if style == "efmmetal":
+        return Channel("EFM", r(rng, 55, 70)).p(Rat=pick(rng, "2.7", "3.1", "3.5", "5.2", "7", " 11"), Mod=r(rng, 60, 110),
+                                                MDc=r(rng, 10, 25), FB=r(rng, 30, 80), Swp=r(rng, 0, 30),
+                                                SwD=r(rng, 10, 25), Dec=r(rng, 12, 26), Noi=r(rng, 0, 40))
+    if style == "blip":
+        return Channel("GND", r(rng, 55, 80)).p(Wav=pick(rng, "Sqr", "Tri", "Saw", "Imp"), Swp=r(rng, 30, 100),
+                                                SwD=r(rng, 6, 20)).set(decay=r(rng, 6, 14), slope=r(rng, 10, 30))
     if style == "rim":
-        return snare(rng, "rim")
+        return Channel("tSD", r(rng, 66, 76)).p(Bdy=r(rng, 90, 127), Snp=r(rng, 0, 30), Dec=r(rng, 5, 12),
+                                                NDc=r(rng, 5, 12), Swp=r(rng, 40, 80), NTn=r(rng, 90, 120))
+    if style == "shaker":
+        return Channel("tHH", r(rng, 70, 84)).p(Ton=r(rng, 40, 70), Dec=r(rng, 16, 30), Mtl=r(rng, 0, 30),
+                                                Opn=60, Res=r(rng, 0, 30)).set(attack=r(rng, 8, 20))
+    raise ValueError(style)
+
+
+def md_hats(rng, style):
+    if style == "bright":
+        return Channel("tHH", r(rng, 78, 92)).p(Ton=r(rng, 60, 90), Dec=r(rng, 8, 20), Mtl=r(rng, 60, 100),
+                                                Opn=r(rng, 55, 75), Res=r(rng, 10, 40))
+    if style == "dark":
+        return Channel("tHH", r(rng, 70, 82)).p(Ton=r(rng, 40, 65), Dec=r(rng, 10, 22), Mtl=r(rng, 30, 70),
+                                                Opn=r(rng, 55, 72), Res=r(rng, 0, 25))
+    if style == "noise":
+        return Channel("tHH", r(rng, 82, 96)).p(Ton=r(rng, 70, 100), Dec=r(rng, 8, 18), Mtl=r(rng, 0, 25),
+                                                Opn=r(rng, 50, 70), Res=r(rng, 0, 20))
+    raise ValueError(style)
+
+
+# ---- Plaits -----------------------------------------------------------------
+def pl_kick(rng, style):
+    if style == "808":
+        return Channel("aBD", r(rng, 30, 36)).p(Ton=r(rng, 35, 70), Dec=r(rng, 40, 70), AFM=r(rng, 30, 70),
+                                                SFM=r(rng, 20, 50), Drv=r(rng, 20, 60))
+    if style == "punch":
+        return Channel("aBD", r(rng, 32, 38)).p(Ton=r(rng, 55, 90), Dec=r(rng, 25, 45), AFM=r(rng, 50, 90),
+                                                SFM=r(rng, 30, 70), Drv=r(rng, 50, 100))
+    if style == "synth":
+        return Channel("sBD", r(rng, 31, 38)).p(Ton=r(rng, 45, 85), Dec=r(rng, 30, 55), Drt=r(rng, 20, 60),
+                                                FMA=r(rng, 40, 90), FMD=r(rng, 15, 40))
+    if style == "dirty":
+        return Channel("sBD", r(rng, 29, 35)).p(Ton=r(rng, 60, 100), Dec=r(rng, 35, 60), Drt=r(rng, 70, 115),
+                                                FMA=r(rng, 50, 100), FMD=r(rng, 20, 50)).set(drive=r(rng, 30, 60))
+    raise ValueError(style)
+
+
+def pl_snare(rng, style):
+    if style == "analog":
+        return Channel("aSD", r(rng, 48, 58)).p(Ton=r(rng, 40, 85), Dec=r(rng, 20, 45), Snp=r(rng, 70, 110))
+    if style == "synth":
+        return Channel("sSD", r(rng, 50, 60)).p(FMA=r(rng, 30, 80), Dec=r(rng, 20, 45), Snp=r(rng, 60, 110))
+    if style == "snap":
+        return Channel("sSD", r(rng, 56, 66)).p(FMA=r(rng, 10, 40), Dec=r(rng, 12, 28), Snp=r(rng, 100, 127)).set(drive=r(rng, 20, 50))
+    raise ValueError(style)
+
+
+def pl_clap(rng, style):
+    # Plaits has no clap: a snappy snare with the strip's clap repeats
+    eng = "sSD" if style == "synth" else "aSD"
+    c = Channel(eng, r(rng, 62, 74)).set(aeg_mode="ad", attack=r(rng, 2, 6), decay=r(rng, 16, 26),
+                                          slope=r(rng, 20, 35), repeat=r(rng, 2, 4))
+    if eng == "aSD":
+        c.p(Ton=r(rng, 10, 40), Dec=r(rng, 30, 50), Snp=127)
+    else:
+        c.p(FMA=r(rng, 0, 20), Dec=r(rng, 30, 50), Snp=127)
+    return c.set(filt_type="bp", filt_freq=r(rng, 72, 92), filt_reso=r(rng, 10, 35))
+
+
+def pl_perc(rng, style):
+    if style == "tom":
+        return Channel("aBD", r(rng, 43, 55)).p(Ton=r(rng, 40, 80), Dec=r(rng, 30, 50), AFM=r(rng, 10, 40),
+                                                SFM=r(rng, 0, 20), Drv=r(rng, 0, 30))
+    if style == "wood":
+        return Channel("Mdl", r(rng, 60, 74)).p(Str=r(rng, 0, 25), Bri=r(rng, 40, 75), Dmp=r(rng, 10, 30), Exc=r(rng, 30, 70))
+    if style == "rim":
+        return Channel("Mdl", r(rng, 66, 78)).p(Str=r(rng, 10, 35), Bri=r(rng, 70, 105), Dmp=r(rng, 8, 25), Exc=r(rng, 40, 80))
+    if style == "metal":
+        return Channel("Mdl", r(rng, 58, 72)).p(Str=r(rng, 80, 120), Bri=r(rng, 60, 95), Dmp=r(rng, 20, 40),
+                                                Exc=r(rng, 0, 30)).set(aeg_mode="ad", decay=r(rng, 10, 18), slope=20)
+    if style == "pluck":
+        return Channel("Str", r(rng, 43, 60)).p(Str=r(rng, 30, 80), Bri=r(rng, 40, 85), Dmp=r(rng, 15, 40),
+                                                Exc=r(rng, 0, 30)).set(aeg_mode="ad", decay=r(rng, 12, 22), slope=25)
+    if style == "particle":
+        return Channel("Prt", r(rng, 66, 90)).p(Den=r(rng, 40, 90), Res=r(rng, 40, 90), Spr=r(rng, 20, 70)).set(
+            decay=r(rng, 8, 18), slope=20)
+    raise ValueError(style)
+
+
+def pl_hats(rng, style):
+    if style == "808":
+        return Channel("pHH", r(rng, 66, 80)).p(Ton=r(rng, 50, 90), Dec=r(rng, 10, 25), Noi=r(rng, 30, 70),
+                                                Typ="808", Opn=r(rng, 55, 75))
+    if style == "ring":
+        return Channel("pHH", r(rng, 70, 84)).p(Ton=r(rng, 60, 100), Dec=r(rng, 8, 22), Noi=r(rng, 30, 70),
+                                                Typ="Rng", Opn=r(rng, 55, 72))
+    raise ValueError(style)
+
+
+# ---- IDM / glitch -----------------------------------------------------------
+def id_kick(rng, style):
+    if style == "zap":
+        return Channel("Zap", r(rng, 26, 33)).p(Dep=r(rng, 60, 95), Tim=r(rng, 10, 25), FB=r(rng, 0, 30),
+                                                Dec=r(rng, 30, 50), Dir="Dwn").set(drive=r(rng, 20, 60))
+    if style == "crush":
+        return Channel("Crs", r(rng, 30, 38)).p(Src=pick(rng, "Sqr", "FM"), Rat=r(rng, 80, 120), Bit=r(rng, 10, 50),
+                                                Jit=0, Dec=r(rng, 25, 45), Glt=0).set(
+            aeg_mode="ad", decay=r(rng, 18, 28), slope=r(rng, 30, 50), filt_type="lp", filt_freq=r(rng, 50, 75))
+    if style == "byte":
+        return Channel("Byt", r(rng, 24, 34)).p(Frm=r(rng, 0, 7), A=r(rng, 0, 40), B=r(rng, 0, 40), Rst=1).set(
+            decay=r(rng, 14, 24), slope=r(rng, 40, 60), filt_type="lp", filt_freq=r(rng, 40, 62), filt_reso=r(rng, 20, 50),
+            drive=r(rng, 20, 60))
+    raise ValueError(style)
+
+
+def id_snare(rng, style):
+    if style == "noise":
+        return Channel("Crs", r(rng, 55, 72)).p(Src="Noi", Rat=r(rng, 30, 70), Bit=r(rng, 40, 90),
+                                               Jit=r(rng, 0, 40), Dec=r(rng, 25, 45), Glt=r(rng, 0, 20))
+    if style == "comb":
+        return Channel("Cmb", r(rng, 50, 62)).p(Exc="Noi", FB=r(rng, 100, 116), Dmp=r(rng, 40, 80), Bur=r(rng, 30, 70),
+                                               Rat=r(rng, 0, 127), Mx2=r(rng, 20, 60)).set(decay=r(rng, 14, 24))
+    if style == "zap":
+        return Channel("Zap", r(rng, 48, 60)).p(Dep=r(rng, 40, 80), Tim=r(rng, 5, 20), FB=r(rng, 60, 110),
+                                                Dec=r(rng, 20, 35), Dir="Dwn").set(filt_type="hp", filt_freq=r(rng, 40, 60))
+    raise ValueError(style)
+
+
+def id_clap(rng, style):
+    if style == "crush":
+        return Channel("Crs", r(rng, 70, 90)).p(Src="Noi", Rat=r(rng, 40, 90), Bit=r(rng, 50, 100), Jit=r(rng, 20, 60),
+                                               Dec=r(rng, 30, 50), Glt=0).set(
+            aeg_mode="ad", attack=r(rng, 2, 6), decay=r(rng, 16, 26), repeat=r(rng, 2, 5),
+            filt_type="bp", filt_freq=r(rng, 72, 92), filt_reso=r(rng, 10, 40))
+    if style == "comb":
+        return Channel("Cmb", r(rng, 60, 80)).p(Exc="Clk", FB=r(rng, 96, 112), Dmp=r(rng, 50, 90), Bur=r(rng, 40, 80),
+                                               Rat=r(rng, 40, 127), Mx2=r(rng, 40, 80)).set(decay=r(rng, 14, 22), repeat=r(rng, 2, 4))
+    raise ValueError(style)
+
+
+def id_perc(rng, style):
+    if style == "byte":
+        return Channel("Byt", r(rng, 46, 70)).p(Frm=r(rng, 0, 7), A=r(rng, 0, 127), B=r(rng, 0, 127),
+                                                Rst=1).set(decay=r(rng, 6, 16), slope=r(rng, 10, 30))
+    if style == "comb":
+        # FB is bipolar (64 = none); below 64 the comb sounds hollow
+        return Channel("Cmb", r(rng, 38, 60)).p(Exc=pick(rng, "Imp", "Clk"), FB=pick(rng, r(rng, 104, 120), r(rng, 8, 24)),
+                                                Dmp=r(rng, 30, 80), Bur=r(rng, 5, 30), Rat=r(rng, 0, 127),
+                                                Mx2=r(rng, 20, 80)).set(decay=r(rng, 12, 22))
+    if style == "zap":
+        return Channel("Zap", r(rng, 40, 58)).p(Dep=r(rng, 60, 110), Tim=r(rng, 8, 30), FB=r(rng, 0, 60),
+                                                Dec=r(rng, 15, 30), Dir=pick(rng, "Dwn", "Up", "Bth"))
+    if style == "glitch":
+        return Channel("Crs", r(rng, 44, 76)).p(Src=pick(rng, "Sqr", "Saw", "FM"), Rat=r(rng, 40, 100),
+                                                Bit=r(rng, 70, 120), Jit=r(rng, 30, 100), Dec=r(rng, 12, 28), Glt=r(rng, 30, 100))
+    if style == "metal":
+        return Channel("Rng", r(rng, 56, 72)).p(Spr=r(rng, 70, 127), RM=r(rng, 70, 127), Ton=r(rng, 60, 95),
+                                                Res=r(rng, 10, 40), Wav=pick(rng, "Sqr", "Sin")).set(decay=r(rng, 8, 16), slope=25)
+    if style == "cowbell":
+        return Channel("Rng", r(rng, 66, 74)).p(Spr=r(rng, 0, 20), RM=r(rng, 0, 30), Ton=r(rng, 60, 85),
+                                                Res=r(rng, 30, 60), Wav="Sqr").set(decay=r(rng, 8, 14), slope=25)
+    raise ValueError(style)
+
+
+def id_hats(rng, style):
+    if style == "crush":
+        return Channel("Crs", r(rng, 84, 100)).p(Src="Noi", Rat=r(rng, 5, 35), Bit=r(rng, 40, 100), Jit=r(rng, 10, 50),
+                                                Dec=100, Glt=r(rng, 0, 30)).set(
+            aeg_mode="ad", decay=r(rng, 3, 7), decay_alt=r(rng, 18, 28), slope=20, filt_type="hp", filt_freq=r(rng, 70, 90))
+    if style == "ring":
+        return Channel("Rng", r(rng, 84, 100)).p(Spr=r(rng, 90, 127), RM=r(rng, 90, 127), Ton=r(rng, 90, 120),
+                                                Res=r(rng, 0, 20), Wav="Sqr").set(
+            decay=r(rng, 3, 7), decay_alt=r(rng, 16, 26), slope=20, filt_type="hp", filt_freq=r(rng, 72, 92))
+    raise ValueError(style)
+
+
+# ---- LXR --------------------------------------------------------------------
+def lx_kick(rng, style):
+    c = Channel("Drm", r(rng, 33, 40)).p(Wav="Sin", PDc=r(rng, 20, 40), PSl=r(rng, 40, 70), PAm=r(rng, 40, 65),
+                                         FMA=0, TrW=pick(rng, "Kik", "Kk2", "Clk"), TrV=r(rng, 50, 100),
+                                         TrF=r(rng, 20, 50)).set(decay=r(rng, 20, 32), slope=r(rng, 25, 45))
+    if style == "fm":
+        c.p(FMA=r(rng, 20, 50), FMF=r(rng, 30, 64), FMW="Sin")
+    if style == "hard":
+        c.set(drive=r(rng, 40, 80))
+    return c
+
+
+def lx_snare(rng, style):
+    return Channel("Snr", r(rng, 50, 60)).p(Wav=pick(rng, "Tri", "Sin"), Noi=r(rng, 90, 127), NFF=r(rng, 80, 110),
+                                            NFR=r(rng, 10, 40), NFT=pick(rng, "HP", "BP"), PDc=r(rng, 25, 45),
+                                            PAm=r(rng, 20, 45), Mix=r(rng, 60, 100),
+                                            TrW=pick(rng, "Snr", "Snp", "Clk"), TrV=r(rng, 30, 80)).set(
+        decay=r(rng, 12, 22), slope=r(rng, 20, 40), drive=r(rng, 0, 40) if style == "hard" else 0)
+
+
+def lx_clap(rng, style):
+    return Channel("Snr", r(rng, 60, 70)).p(Wav="Noi", Noi=r(rng, 100, 127), NFF=r(rng, 80, 100), NFR=r(rng, 0, 25),
+                                           NFT="BP", Mix=r(rng, 100, 127)).set(
+        repeat=r(rng, 2, 4), attack=r(rng, 4, 10), drive=r(rng, 20, 50), decay=r(rng, 16, 26), slope=25)
+
+
+def lx_perc(rng, style):
+    if style == "tom":
+        return Channel("Drm", r(rng, 45, 58)).p(Wav="Sin", PDc=r(rng, 30, 50), PAm=r(rng, 25, 45), FMA=r(rng, 0, 30),
+                                               FMF=r(rng, 64, 90), TrW="Tom", TrV=r(rng, 20, 50)).set(decay=r(rng, 18, 30), slope=30)
+    if style == "fmblip":
+        return Channel("Drm", r(rng, 60, 80)).p(Wav=pick(rng, "Sin", "Tri"), PDc=r(rng, 10, 25), PAm=r(rng, 30, 60),
+                                               FMA=r(rng, 60, 110), FMF=r(rng, 70, 110), FMW=pick(rng, "Sin", "Rec"),
+                                               TrW=pick(rng, "Tik", "Rim", "Drp"), TrV=r(rng, 30, 80)).set(decay=r(rng, 6, 14), slope=25)
+    if style == "rim":
+        return Channel("Drm", r(rng, 70, 82)).p(Wav="Tri", PDc=r(rng, 5, 15), PAm=r(rng, 10, 30), FMA=0,
+                                               TrW="Rim", TrV=r(rng, 80, 127)).set(decay=r(rng, 4, 9), slope=20)
     if style == "cym":
         return Channel("Cym", r(rng, 68, 80)).p(Wav="Sin", MF1=r(rng, 80, 100), MF2=r(rng, 95, 115), MG1=r(rng, 70, 110),
                                                MG2=r(rng, 50, 90), MW1="Rec", MW2="Tri").set(
-            decay=r(rng, 55, 75), filt_type="hp", filt_freq=r(rng, 62, 78), slope=30)
-    if style == "ride":
-        return Channel("Rng", r(rng, 72, 86)).p(Spr=r(rng, 90, 127), RM=r(rng, 90, 127), Ton=r(rng, 95, 120),
-                                                Res=r(rng, 5, 30), Wav="Sqr").set(decay=r(rng, 50, 70), slope=35,
-                                                                                   filt_type="hp", filt_freq=r(rng, 60, 75))
+            decay=r(rng, 20, 32), filt_type="hp", filt_freq=r(rng, 62, 78), slope=30)
     raise ValueError(style)
 
 
-# =============================================================================
-# genres
-# =============================================================================
-WORDS = {
-    "EL": ["Drexc", "Cybrt", "Plnet", "Nmbr", "Clear", "Model", "Robot", "Bass", "Optic", "Zone",
-           "Sharp", "Moto", "Lazr", "Vandr", "Ultra", "Grid", "Spcr", "Krome", "Pulse", "Rfrnc"],
-    "TK": ["Warhs", "Basmt", "Tresr", "Strob", "Iron", "Hypno", "Loop", "Rumbl", "Acid", "Berg",
-           "Steel", "Tunnl", "Drone", "Night", "Pound", "Ritul", "Fog", "Volt", "Pit", "Mono"],
-    "ID": ["Glich", "Skwee", "Fract", "Splnt", "Shard", "Brkcr", "Corrp", "Micro", "Pixel", "Dust",
-           "Sprng", "Wires", "Ctrl", "Bleep", "Shrap", "Melt", "Nerve", "Prism", "Chip", "Ether"],
-    "MN": ["Click", "Wood", "Dub", "Echo", "Dry", "Pulse", "Tiny", "Deep", "Room", "Felt",
-           "Drip", "Pebbl", "Grain", "Minim", "Tape", "Moss", "Chord", "Space", "Haze", "Soft"],
-    "IN": ["Grind", "Rust", "Press", "Fact", "Hammr", "Slag", "Bunkr", "Chain", "Mach", "Ebm",
-           "Sirn", "Furn", "Anvil", "Steam", "Crush", "Riot", "Smog", "Weld", "Drill", "Burn"],
-    "BR": ["Amen", "Jungl", "Breka", "Roll", "Think", "Dread", "Step", "Ruff", "Atmos", "Liqd",
-           "Neuro", "Ragga", "Hrdcr", "Dark", "Speed", "Chop", "Tekst", "Swing", "Sub", "Funky"],
-}
+def lx_hats(rng, style):
+    return Channel("Hat", r(rng, 80, 92)).p(Wav="Rec", MF1=r(rng, 85, 105), MF2=r(rng, 95, 120), MG1=r(rng, 70, 110),
+                                           MG2=r(rng, 50, 100), MW1="Rec", MW2="Rec").set(
+        decay=r(rng, 3, 8), decay_alt=r(rng, 20, 30), filt_type="hp", filt_freq=r(rng, 68, 85), slope=20)
 
-PATTERNS = {   # kick, snare, clap, perc4, perc5, hats ('o' = open hat via trigger 7)
-    "EL": ["X..x..x...X..x..", "....X.......X...", "....x.......x..x", "......x.....x.x.", "..x.......x....x", "xxxoxxxxxxxoxxxx"],
-    "TK": ["X...X...X...X...", "...x.......x..x.", "....x.......x...", "..x...x...x..xx.", "x.x.x.x.x.x.x.x.", "..o...o...o...o."],
-    "ID": ["X..x.r....X.x...", "....X..x...rX...", "......x.......x.", "..x.x....x.xr...", "r..x..x.x...x..r", "xx.xxrx.xo.xxrxo"],
-    "MN": ["X...X...X...X...", "............x...", "....x.......x...", "..x.....x..x....", "...x..x....x..x.", "x.x.x.x.x.x.x.xo"],
-    "IN": ["X..xX...X..xX...", "....X.......X...", "....x.......x...", "x...x.x.x...x.x.", "..x...x...x...x.", "xxoxxxoxxxoxxxox"],
-    "BR": ["X.........X.....", "....X.......X...", "......x.......x.", "..x..x....x..x..", ".......x.x....x.", "x.xxx.xxx.xxxox."],
+
+ROLES = {
+    "MD": dict(kick=(md_kick, ["punch", "click", "heavy", "efm", "gnd"]),
+               snare=(md_snare, ["909", "tight", "efm", "gnd"]),
+               clap=(md_clap, ["909", "tight", "crowd"]),
+               perc4=(md_perc, ["tom", "efmwood", "blip", "rim"]),
+               perc5=(md_perc, ["efmmetal", "blip", "rim", "shaker", "efmwood"]),
+               hats=(md_hats, ["bright", "dark", "noise"])),
+    "PL": dict(kick=(pl_kick, ["808", "punch", "synth", "dirty"]),
+               snare=(pl_snare, ["analog", "synth", "snap"]),
+               clap=(pl_clap, ["analog", "synth"]),
+               perc4=(pl_perc, ["tom", "wood", "rim", "pluck"]),
+               perc5=(pl_perc, ["metal", "particle", "rim", "wood", "pluck"]),
+               hats=(pl_hats, ["808", "ring"])),
+    "ID": dict(kick=(id_kick, ["zap", "crush", "byte"]),
+               snare=(id_snare, ["noise", "comb", "zap"]),
+               clap=(id_clap, ["crush", "comb"]),
+               perc4=(id_perc, ["byte", "comb", "zap", "cowbell"]),
+               perc5=(id_perc, ["glitch", "metal", "byte", "comb", "zap"]),
+               hats=(id_hats, ["crush", "ring"])),
+    "LX": dict(kick=(lx_kick, ["sine", "fm", "hard"]),
+               snare=(lx_snare, ["soft", "hard"]),
+               clap=(lx_clap, ["x"]),
+               perc4=(lx_perc, ["tom", "fmblip", "rim"]),
+               perc5=(lx_perc, ["cym", "fmblip", "rim"]),
+               hats=(lx_hats, ["x"])),
+}
+ROLE_ORDER = ["kick", "snare", "clap", "perc4", "perc5", "hats"]
+
+
+def make_role(rng, family, role):
+    fn, styles = ROLES[family][role]
+    return fn(rng, rng.choice(styles))
+
+
+# =============================================================================
+# flavors: tempo, pattern and FX character; spread over every family
+# =============================================================================
+FLAVORS = ["drive", "electro", "broken", "space", "metal", "breaks", "tight", "warp"]
+BPM = {"drive": (128, 138), "electro": (122, 134), "broken": (140, 170), "space": (118, 128),
+       "metal": (120, 134), "breaks": (164, 176), "tight": (124, 132), "warp": (130, 150)}
+PATTERNS = {   # kick, snare, clap, perc4, perc5, hats ('o' = open hat via trigger 7, 'r' = ratchet)
+    "drive":   ["X...X...X...X...", "...x.......x..x.", "....x.......x...", "..x...x...x..xx.", "x.x.x.x.x.x.x.x.", "..o...o...o...o."],
+    "electro": ["X..x..x...X..x..", "....X.......X...", "....x.......x..x", "......x.....x.x.", "..x.......x....x", "xxxoxxxxxxxoxxxx"],
+    "broken":  ["X..x.r....X.x...", "....X..x...rX...", "......x.......x.", "..x.x....x.xr...", "r..x..x.x...x..r", "xx.xxrx.xo.xxrxo"],
+    "space":   ["X...X...X...X...", "............x...", "....x.......x...", "..x.....x..x....", "...x..x....x..x.", "x.x.x.x.x.x.x.xo"],
+    "metal":   ["X..xX...X..xX...", "....X.......X...", "....x.......x...", "x...x.x.x...x.x.", "..x...x...x...x.", "xxoxxxoxxxoxxxox"],
+    "breaks":  ["X.........X.....", "....X.......X...", "......x.......x.", "..x..x....x..x..", ".......x.x....x.", "x.xxx.xxx.xxxox."],
+    "tight":   ["X...X...X...X..x", "....X.......X...", "....x.......x...", "..x...x..x...x..", ".x...x...x...x..", "xxxxxxxxxxxxxxxo"],
+    "warp":    ["X..x...x..X..x..", "....X.....x.X...", "...x.......x....", "x.x..xr..x..x.x.", "..r...x...r...x.", "x.xox.xxx.xox.xx"],
 }
 
 
 def drive_fx(rng, hard=False):
-    """FX bus distortion. P1..P4 of the LXR distortion: tube = drive, colour,
-    tone, level; fold = drive, offset, tone, level; clip (RAT) = drive,
-    feedback, tone, level. Offset and feedback stay low: the fold offset is
-    a DC shift and the RAT feedback self-oscillates on silence."""
-    dist = rng.choice([0, 0, 1, 2]) if not hard else rng.choice([0, 1, 2, 2])
-    drive = r(rng, 30, 70) if not hard else r(rng, 55, 100)
-    # fold: small offset only; clip: no feedback (it self-oscillates at high drive)
-    p1 = r(rng, 20, 80) if dist == 0 else 0
-    return dict(dist=dist, p=[drive, p1, r(rng, 40, 90), r(rng, 55, 85)])
+    """LXR distortion: P1 drive, P2 colour (tube) / offset (fold) / feedback
+    (clip), P3 tone, P4 level. Fold offset and clip feedback stay 0: the
+    offset is a DC shift and the RAT feedback self-oscillates."""
+    dist = rng.choice([0, 1, 2]) if hard else rng.choice([0, 0, 1, 2])
+    drive = r(rng, 55, 110) if hard else r(rng, 30, 80)
+    p2 = r(rng, 20, 90) if dist == 0 else 0
+    return dict(dist=dist, p=[drive, p2, r(rng, 35, 85), r(rng, 55, 85)])
 
 
-def electro(rng, i):
-    k = Kit(f"EL{WORDS['EL'][i]}", "EL", r(rng, 122, 136))
-    k.ch = [kick(rng, rng.choice(["808", "808", "synth", "lxr"])),
-            snare(rng, rng.choice(["808", "808", "synth", "lxr"])),
-            clap(rng, rng.choice(["909", "wide", "lxr"])),
-            perc(rng, rng.choice(["tom", "lxrtom", "cowbell", "zap"])),
-            perc(rng, rng.choice(["cowbell", "laser", "zap", "bell", "efmperc"])),
-            hats(rng, rng.choice(["808", "808", "lxr", "ring"]))]
-    k.ch[0].set(pan=64)
-    k.ch[3].set(pan=r(rng, 40, 56))
-    k.ch[4].set(pan=r(rng, 72, 90))
-    k.ch[5].set(pan=r(rng, 56, 72))
-    # electro: delay on clap + perc 5
-    if rng.random() < 0.8:
-        k.fx.update(type="del", drywet=r(rng, 25, 45), p=[r(rng, 70, 110), r(rng, 60, 100), r(rng, 40, 80), r(rng, 40, 75)],
-                    delay=rng.choice([0, 1]))
-        k.ch[2].set(out="fx")
-        k.ch[4].set(out="fx")
-    else:
-        k.fx.update(type="rng", drywet=r(rng, 40, 70), p=[r(rng, 20, 90), 64, 64, 64], wave=rng.choice([0, 1, 3]))
-        k.ch[4].set(out="fx")
-    return k
+def setup_fx(rng, kit):
+    """FX bus: type, which channels go through it, and LFO movement on it"""
+    fl = kit.flavor
+    weights = {
+        "drive":   {"drv": 3, "cmp": 2, "del": 2, "rng": 1},
+        "electro": {"del": 3, "rng": 2, "drv": 1, "cmp": 1},
+        "broken":  {"rng": 3, "del": 3, "drv": 2},
+        "space":   {"del": 5, "rng": 1},
+        "metal":   {"drv": 5, "rng": 2, "cmp": 1},
+        "breaks":  {"cmp": 4, "drv": 2, "del": 1},
+        "tight":   {"cmp": 3, "drv": 2, "del": 2},
+        "warp":    {"del": 3, "rng": 3, "drv": 2},
+    }[fl]
+    types = list(weights)
+    t = rng.choices(types, [weights[x] for x in types])[0]
+    f = kit.fx
+    f["type"] = t
+    if t == "del":
+        # short to medium times, feedback below runaway, darker repeats
+        f.update(drywet=r(rng, 25, 55), delay=rng.choice([0, 1, 1]),
+                 p=[r(rng, 40, 110), r(rng, 40, 110), r(rng, 20, 65), r(rng, 30, 70)])
+        sends = rng.sample([1, 2, 3, 4], r(rng, 1, 3))
+    elif t == "drv":
+        f.update(drywet=r(rng, 50, 100), **drive_fx(rng, hard=fl in ("metal", "drive")))
+        sends = rng.sample([0, 1, 2, 3, 4], r(rng, 2, 4))
+    elif t == "rng":
+        f.update(drywet=r(rng, 30, 80), p=[r(rng, 10, 120), 64, 64, 64], wave=rng.choice([0, 1, 2, 3, 5]))
+        sends = rng.sample([1, 2, 3, 4, 5], r(rng, 1, 3))
+    else:  # cmp: glue on the drums, with a bit of pump
+        # slow-ish attack lets the transients through: punch, not squash
+        f.update(drywet=100, ratio=r(rng, 2, 5), p=[r(rng, 25, 60), r(rng, 15, 50), r(rng, 55, 90), r(rng, 40, 70)])
+        sends = [0, 1, 2] + rng.sample([3, 4], r(rng, 0, 2))
+    for c in sends:
+        kit.ch[c].set(out="fx")
+
+    # movement on the FX bus from a free channel LFO (the new global targets)
+    if t != "cmp" and rng.random() < 0.6:
+        ch = kit.lfo_free(rng)
+        if ch is not None:
+            if t == "del":
+                dest, amt = rng.choice([("fx3", r(rng, 20, 45)), ("fx1", r(rng, 3, 10)), ("fwt", r(rng, 20, 40)),
+                                        ("fx4", r(rng, 10, 25))])
+            elif t == "drv":
+                dest, amt = rng.choice([("fx1", r(rng, 20, 45)), ("fx3", r(rng, 25, 50))])
+            else:
+                dest, amt = "fx1", r(rng, 15, 50)
+            wave = rng.choice(["tri", "sin", "rnd", "sdn", "sqr"])
+            retrig = rng.choice([0, 0, 1, 2])
+            kit.lfo_mod(ch, GLOBAL[dest], amt, wave=wave, freq=r(rng, 12, 45), retrig=retrig)
+            kit.notes.append(f"lf{ch + 1}->{dest}")
 
 
-def techno(rng, i):
-    k = Kit(f"TK{WORDS['TK'][i]}", "TK", r(rng, 128, 140))
-    k.ch = [kick(rng, rng.choice(["909", "909", "rumble", "synth"])),
-            snare(rng, rng.choice(["909", "rim", "noise"])),
-            clap(rng, rng.choice(["909", "tight", "909"])),
-            perc(rng, rng.choice(["tom909", "efmperc", "wood", "cowbell"])),
-            perc(rng, rng.choice(["ride", "metal", "efmperc", "particle"])),
-            hats(rng, rng.choice(["909", "909", "noise", "ring"]))]
-    k.ch[3].set(pan=r(rng, 40, 56))
-    k.ch[4].set(pan=r(rng, 70, 88))
-    if rng.random() < 0.5:
-        # dub techno style delay on perc and clap
-        k.fx.update(type="del", drywet=r(rng, 30, 55), p=[r(rng, 75, 115), r(rng, 80, 120), r(rng, 20, 60), r(rng, 55, 90)],
-                    delay=1)
-        k.ch[2].set(out="fx")
-        k.ch[3].set(out="fx")
-    else:
-        # distorted percussion bus
-        k.fx.update(type="drv", drywet=r(rng, 50, 90), **drive_fx(rng))
-        k.ch[3].set(out="fx")
-        k.ch[4].set(out="fx")
-    if rng.random() < 0.5:   # moving filter on the metal channel
-        k.ch[4].set(filt_type="hp", filt_freq=r(rng, 60, 90), filt_reso=r(rng, 20, 60))
-        k.lfo_mod(4, mod_dest(4, "FILT_FREQ"), r(rng, 15, 35), wave="tri", freq=r(rng, 15, 30))
-    return k
-
-
-def idm(rng, i):
-    k = Kit(f"ID{WORDS['ID'][i]}", "ID", r(rng, 140, 170))
-    k.ch = [kick(rng, rng.choice(["click", "efm", "synth", "dirty"])),
-            snare(rng, rng.choice(["noise", "efm", "rim", "synth"])),
-            perc(rng, rng.choice(["glitch", "byte", "zap", "comb"])),
-            perc(rng, rng.choice(["comb", "zap", "byte", "gnd", "bell"])),
-            perc(rng, rng.choice(["glitch", "particle", "laser", "metal", "comb"])),
-            hats(rng, rng.choice(["crush", "noise", "ring", "808"]))]
-    for c in range(1, 6):
-        k.ch[c].set(pan=r(rng, 24, 104))
-    # bit and sample rate damage
-    for c in rng.sample(range(6), 2):
-        k.ch[c].set(bits=r(rng, 40, 90))
-    k.ch[rng.randrange(1, 6)].set(srate=r(rng, 60, 105))
-    # clap-style repeats as ratchets
-    k.ch[rng.randrange(2, 5)].set(repeat=r(rng, 2, 6), attack=r(rng, 3, 10))
-    # random LFO movement
-    for c in rng.sample(range(1, 6), 2):
-        target = rng.choice(["BITS", "FILT_FREQ", "DECAY", "PAN", "SRATE"])
+def setup_movement(rng, kit):
+    """channel movement: bit/sample rate damage, ratchets, LFOs"""
+    fl = kit.flavor
+    if fl in ("broken", "warp") or (kit.family == "ID" and rng.random() < 0.7):
+        for c in rng.sample(range(6), 2):
+            kit.ch[c].set(bits=r(rng, 40, 90))
+        kit.ch[rng.randrange(1, 6)].set(srate=r(rng, 60, 105))
+    if fl in ("broken", "warp") and rng.random() < 0.6:
+        kit.ch[rng.randrange(2, 5)].set(repeat=r(rng, 2, 5), attack=r(rng, 2, 8))
+    n = 2 if fl in ("broken", "warp") else (1 if rng.random() < 0.6 else 0)
+    for _ in range(n):
+        c = kit.lfo_free(rng, avoid=(0,))
+        if c is None:
+            break
+        target = rng.choice(["BITS", "FILT_FREQ", "DECAY", "PAN", "SRATE", "DRIVE"])
         if target == "FILT_FREQ":
-            k.ch[c].set(filt_type=rng.choice(["lp", "bp", "hp"]), filt_freq=r(rng, 50, 90), filt_reso=r(rng, 30, 80))
-        k.lfo_mod(c, mod_dest(c, target), r(rng, 20, 45), wave=rng.choice(["rnd", "sqr", "xdn", "tri"]), freq=r(rng, 30, 70))
-    if rng.random() < 0.5:
-        k.fx.update(type="rng", drywet=r(rng, 30, 70), p=[r(rng, 10, 120), 64, 64, 64], wave=rng.choice([0, 2, 3, 5]))
+            kit.ch[c].set(filt_type=rng.choice(["lp", "bp", "hp"]), filt_freq=r(rng, 55, 90), filt_reso=r(rng, 20, 60))
+        if target == "DECAY" and not kit.ch[c].aeg_on():
+            target = "PAN"
+        kit.lfo_mod(c, mod_dest(c, target), r(rng, 15, 40), wave=rng.choice(["rnd", "sqr", "xdn", "tri", "sin"]),
+                    freq=r(rng, 25, 65))
+    if fl == "metal":
+        kit.ch[0].set(drive=max(kit.ch[0].s("drive"), r(rng, 20, 60)))
+        kit.ch[1].set(drive=max(kit.ch[1].s("drive"), r(rng, 30, 70)))
+
+
+# =============================================================================
+# kits per family
+# =============================================================================
+NAMES = {
+    "MD": ["Anvil", "Bolt", "Crank", "Diode", "Gauge", "Hertz", "Ingot", "Joule", "Kiln", "Lathe",
+           "Motor", "Nitro", "Ohm", "Piston", "Quartz", "Rivet", "Servo", "Torque", "Unit", "Valve",
+           "Watt", "Xenon", "Yoke", "Zinc", "Alloy", "Brass", "Coil", "Drill", "Edge", "Flint",
+           "Grid", "Hinge"],
+    "PL": ["Glass", "Reed", "Tide", "Moss", "Flare", "Prism", "Wave", "Fern", "Opal", "Drift",
+           "Pulse", "Grain", "Shell", "Bloom", "Mist", "Ripple", "Chime", "Stone", "Ember", "Frost",
+           "Petal", "Silk", "Rain", "Dune", "Lumen", "Spore", "Coral", "Pine", "Haze", "Bead",
+           "Wisp", "Mica"],
+    "ID": ["Glitch", "Shard", "Splint", "Fract", "Corrupt", "Pixel", "Micro", "Nerve", "Shrap", "Melt",
+           "Bleep", "Wires", "Ctrl", "Chip", "Ether", "Dust", "Sprng", "Skwee", "Brkcr", "Spike",
+           "Static", "Byte", "Loop", "Stutter", "Hash", "Null", "Parse", "Fault", "Jitter", "Alias",
+           "Bitrot", "Hex"],
+    "LX": ["Classic", "Analog", "Punch", "Metal", "Snap", "Boom", "Tin", "Retro", "Sine", "Square",
+           "Click", "Ring", "Pitch", "Noise", "Pulse", "Tone"],
+    "HY": ["Hybrid", "Mutant", "Splice", "Chimera", "Fusion", "Blend", "Cross", "Graft", "Weave", "Mosaic",
+           "Patch", "Remix", "Morph", "Collage", "Bridge", "Union"],
+}
+
+
+def build_kit(rng, family, i):
+    flavor = FLAVORS[i % len(FLAVORS)]
+    bpm = r(rng, *BPM[flavor])
+    name = (family + NAMES[family][i])[:8]
+    kit = Kit(name, family, flavor, bpm)
+    if family == "HY":
+        fams = ["MD", "PL", "ID", "LX"]
+        kit.ch = [make_role(rng, rng.choice(fams), role) for role in ROLE_ORDER]
     else:
-        k.fx.update(type="del", drywet=r(rng, 30, 60), p=[r(rng, 10, 60), r(rng, 10, 60), r(rng, 50, 100), r(rng, 60, 100)],
-                    delay=1)
-    for c in rng.sample(range(2, 5), 2):
-        k.ch[c].set(out="fx")
-    return k
+        # up to two guest channels from other families, never the kick
+        guests = set(rng.sample([2, 3, 4, 5], rng.choice([0, 1, 1, 2]))) if family != "LX" else set()
+        others = [f for f in ("MD", "PL", "ID", "LX") if f != family]
+        kit.ch = [make_role(rng, rng.choice(others) if k in guests else family, role)
+                  for k, role in enumerate(ROLE_ORDER)]
+    # stereo picture
+    kit.ch[3].set(pan=r(rng, 36, 56))
+    kit.ch[4].set(pan=r(rng, 72, 92))
+    kit.ch[5].set(pan=r(rng, 54, 74))
+    setup_movement(rng, kit)
+    setup_fx(rng, kit)
+    return kit
 
 
-def minimal(rng, i):
-    k = Kit(f"MN{WORDS['MN'][i]}", "MN", r(rng, 120, 128))
-    k.ch = [kick(rng, rng.choice(["909", "click", "808"])),
-            snare(rng, rng.choice(["rim", "rim", "synth"])),
-            clap(rng, rng.choice(["tight", "909"])),
-            perc(rng, rng.choice(["wood", "bell", "pluck"])),
-            perc(rng, rng.choice(["particle", "wood", "comb", "pluck"])),
-            hats(rng, rng.choice(["808", "noise", "ring"]))]
-    k.ch[0].p(**({"Dec": r(rng, 30, 50)} if k.ch[0].engine == "tBD" else {}))
-    k.ch[3].set(pan=r(rng, 36, 54))
-    k.ch[4].set(pan=r(rng, 74, 92))
-    k.fx.update(type="del", drywet=r(rng, 35, 60), p=[r(rng, 80, 120), r(rng, 90, 127), r(rng, 15, 50), r(rng, 65, 95)],
-                delay=1)
-    k.ch[2].set(out="fx")
-    k.ch[3].set(out="fx")
-    if rng.random() < 0.5:
-        k.ch[4].set(out="fx")
-    k.lfo_mod(3, mod_dest(3, "PAN"), r(rng, 15, 35), wave="sin", freq=r(rng, 10, 25))
-    return k
+# =============================================================================
+# checks: shorten what rings, whistles or hangs
+# =============================================================================
+#                 kick  snare clap  perc4 perc5 hats  open
+RING_MAX = [0.55, 0.40, 0.45, 0.45, 0.45, 0.14, 0.60]
+HF_MAX = [0.10, 0.32, 0.38, 0.32, 0.32, 0.14, 0.55]
+RING_MIN = [0.18, 0.09, 0.09, 0.04, 0.03, 0.02, 0.12]
+TONE_LEVEL = -42.0      # dB re peak, narrow peak above 1.5 kHz after 150 ms
+TONE_PROM = 18.0
+
+DECAY_PARAMS = ["Dec", "NDc", "SwD", "MDc"]
 
 
-def industrial(rng, i):
-    k = Kit(f"IN{WORDS['IN'][i]}", "IN", r(rng, 118, 132))
-    k.ch = [kick(rng, rng.choice(["dirty", "rumble", "909"])),
-            snare(rng, rng.choice(["noise", "909", "lxr", "efm"])),
-            clap(rng, rng.choice(["wide", "909", "lxr"])),
-            perc(rng, rng.choice(["metal", "tom909", "efmperc", "comb"])),
-            perc(rng, rng.choice(["metal", "glitch", "laser", "ride"])),
-            hats(rng, rng.choice(["noise", "crush", "909"]))]
-    k.ch[0].set(drive=r(rng, 30, 70))
-    k.ch[1].set(drive=r(rng, 30, 80))
-    k.ch[3].set(pan=r(rng, 36, 56))
-    k.ch[4].set(pan=r(rng, 72, 92))
-    k.fx.update(type="drv", drywet=r(rng, 60, 100), **drive_fx(rng, hard=True))
-    for c in (1, 2, 3):
-        k.ch[c].set(out="fx")
-    if rng.random() < 0.5:
-        k.ch[4].set(bits=r(rng, 30, 70))
-    return k
+def problems(m):
+    bad = []
+    for k in range(7):
+        c = m[k]
+        if c["peak"] < 1e-4:
+            continue
+        why = []
+        if c["ring"] > RING_MAX[k]:
+            why.append(f"ring {c['ring']:.2f}")
+        elif c["ring"] < RING_MIN[k]:
+            why.append(f"short {c['ring']:.2f}")
+        if c["hf"] > HF_MAX[k]:
+            why.append(f"hf {c['hf']:.2f}")
+        f, lvl, prom = c["tone"]
+        if k < 6 and lvl > TONE_LEVEL and prom > TONE_PROM:
+            why.append(f"tone {f:.0f}Hz {lvl:.0f}dB")
+        if why:
+            bad.append((k, why))
+    return bad
 
 
-def breaks(rng, i):
-    k = Kit(f"BR{WORDS['BR'][i]}", "BR", r(rng, 165, 175))
-    k.ch = [kick(rng, rng.choice(["909", "808", "lxr"])),
-            snare(rng, rng.choice(["808", "909", "lxr"])),
-            clap(rng, rng.choice(["tight", "909"])),
-            perc(rng, rng.choice(["tom", "lxrtom", "wood"])),
-            perc(rng, rng.choice(["ride", "cym", "particle"])),
-            hats(rng, rng.choice(["808", "909", "lxr"]))]
-    # jungle snares: tuned up, snappy
-    k.ch[1].set(tune=min(127, k.ch[1].block[L["TUNE"]] + r(rng, 3, 9)))
-    k.ch[0].set(decay=30)
-    k.ch[3].set(pan=r(rng, 40, 56))
-    k.ch[4].set(pan=r(rng, 70, 90))
-    k.fx.update(type="cmp", drywet=100, ratio=r(rng, 2, 4), p=[r(rng, 0, 20), r(rng, 20, 60), r(rng, 60, 90), r(rng, 20, 50)])
-    for c in (0, 1, 2):
-        k.ch[c].set(out="fx")
-    return k
+def shorten(c, alt, attempt):
+    """make one channel shorter; later attempts use the amp EG as a gate"""
+    e = c.engine
+    if alt:
+        if has(e, "Opn"):
+            c.p(Opn=int(c.get("Opn") * 0.8))
+        if c.aeg_on():
+            c.set(decay_alt=max(4, int(c.s("decay_alt") * 0.8)))
+        else:
+            c.set(aeg_mode="ad", attack=0, decay=40, decay_alt=26, slope=20)
+        return
+    if attempt >= 3:
+        # gate with the amp EG
+        if not c.aeg_on():
+            c.set(aeg_mode="ad", attack=0, decay=24, slope=25)
+        else:
+            c.set(decay=max(3, int(c.s("decay") * 0.75)))
+        return
+    if c.aeg_on():
+        c.set(decay=max(3, int(c.s("decay") * 0.8)))
+    for k in DECAY_PARAMS:
+        if has(e, k):
+            c.p(**{k: int(c.get(k) * 0.8)})
+    if e in ("Mdl", "Str"):
+        c.p(Dmp=min(127, c.get("Dmp") + 12))
+    if e == "Cmb":
+        c.p(FB=int(64 + (c.get("FB") - 64) * 0.9))
+    if e == "Zap":
+        c.p(FB=int(c.get("FB") * 0.8))
 
 
-def classic(rng, i):
-    """the original LXR voices, for slots 120..127"""
-    names = ["Classic", "Analog", "Punch", "Metal", "Snap", "Boom", "Tin", "Retro"]
-    k = Kit(f"LX{names[i]}"[:8], "LX", r(rng, 120, 135))
-    k.ch = [kick(rng, "lxr"), snare(rng, "lxr"), clap(rng, "lxr"), perc(rng, "lxrtom"), perc(rng, "cym"), hats(rng, "lxr")]
-    k.ch[3].set(pan=r(rng, 40, 56))
-    k.ch[4].set(pan=r(rng, 72, 90))
-    if i % 2:
-        k.fx.update(type="del", drywet=r(rng, 25, 45), p=[r(rng, 70, 110), r(rng, 60, 100), r(rng, 40, 80), r(rng, 40, 70)])
-        k.ch[2].set(out="fx")
-    return k
+def lengthen(c, alt):
+    e = c.engine
+    if alt:
+        if has(e, "Opn"):
+            c.p(Opn=min(127, int(c.get("Opn") * 1.15) + 2))
+        if c.aeg_on():
+            c.set(decay_alt=min(127, int(c.s("decay_alt") * 1.25) + 2))
+            if has(e, "Dec"):
+                c.p(Dec=min(127, int(c.get("Dec") * 1.15) + 3))
+        return
+    if c.aeg_on():
+        c.set(decay=min(127, int(c.s("decay") * 1.25) + 2))
+    for k in ("Dec", "NDc"):
+        if has(e, k):
+            c.p(**{k: min(127, int(c.get(k) * 1.25) + 3)})
+    if e in ("Mdl", "Str"):
+        c.p(Dmp=max(0, c.get("Dmp") - 8))
+    if e == "Cmb":
+        c.p(FB=int(max(2, min(125, 64 + (c.get("FB") - 64) * 1.08))))
 
 
-WORDS["LX"] = []
-PATTERNS["LX"] = ["X...x.....X.x...", "....X.......X...", "............x..x", "......x.......x.", "x...............", "x.x.x.x.x.x.x.xo"]
+def fix_kit(kit, path, log):
+    for attempt in range(8):
+        kit.write(path)
+        bad = problems(analyse(RENDER, path))
+        if not bad:
+            return attempt
+        for k, why in bad:
+            if attempt == 0 or attempt == 7:
+                log.append(f"  {kit.name} ch{k + 1 if k < 6 else '6o'}: {', '.join(why)}")
+            if why[0].startswith("short"):
+                lengthen(kit.ch[min(k, 5)], k == 6)
+            else:
+                shorten(kit.ch[min(k, 5)], k == 6, attempt)
+    return -1
 
-GENRES = [("EL", electro), ("TK", techno), ("ID", idm), ("MN", minimal), ("IN", industrial), ("BR", breaks)]
 
-# loudness targets per channel (peak, linear) and how far the RMS may push it down
-TARGET_PEAK = [0.85, 0.60, 0.50, 0.45, 0.40, 0.32]
+# =============================================================================
+TARGET_PEAK = [0.85, 0.60, 0.52, 0.48, 0.42, 0.32]
 
 
 def render(kit, path_snd, wav=""):
-    pat = os.path.join(WORK, f"pat_{kit.genre}.txt")
+    pat = os.path.join(WORK, f"pat_{kit.flavor}.txt")
     with open(pat, "w") as f:
-        f.write("\n".join(PATTERNS[kit.genre]) + "\n")
+        f.write("\n".join(PATTERNS[kit.flavor]) + "\n")
     met = os.path.join(WORK, "metrics.json")
     kit.write(path_snd)
     subprocess.run([RENDER, "--kit", path_snd, pat, str(kit.bpm), "2", wav, met], check=True)
@@ -533,41 +797,83 @@ def file_name(slot, name):
     return f"{slot:02d}-{clean[:5]}.snd" if slot < 100 else f"{slot:03d}-{clean[:4]}.snd"
 
 
+GROUPS = [("MD", 32), ("PL", 32), ("ID", 32), ("LX", 16), ("HY", 16)]
+
+
+def family_count(kit):
+    fams = {f: sum(c.engine in FAMILY[f] for c in kit.ch) for f in FAMILY}
+    return fams
+
+
 def main():
     kit_dir = os.path.join(OUT, "shard", "prj00")
     demo_dir = os.path.join(OUT, "demo")
     os.makedirs(kit_dir, exist_ok=True)
     os.makedirs(demo_dir, exist_ok=True)
+    for f in os.listdir(kit_dir):
+        os.unlink(os.path.join(kit_dir, f))
+    only = set(int(x) for x in os.environ.get("ONLY", "").split(",") if x)
     slot = 0
-    report = []
-    for code, fn in GENRES + [("LX", classic)]:
-        for i in range(20 if code != "LX" else 8):
-            rng = random.Random(f"{code}-{i}")
-            kit = fn(rng, i)
+    report, log = [], []
+    for family, count in GROUPS:
+        for i in range(count):
+            if only and slot not in only:
+                slot += 1
+                continue
+            rng = random.Random(f"shard3-{family}-{i}")
+            kit = build_kit(rng, family, i)
+            if family != "HY":
+                assert family_count(kit)[family] >= 4, kit.name
             path = os.path.join(kit_dir, file_name(slot, kit.name))
+            fixed = fix_kit(kit, path, log)
             # gain staging on the channel volumes; quiet engines that are
-            # already at full volume get some of the channel drive as make-up gain
+            # already at full volume get some channel drive as make-up gain
             for _ in range(4):
                 m = render(kit, path)
                 for c in range(6):
                     pk = m["peak"][c]
-                    vol = kit.ch[c].block[L["VOL"]]
+                    vol = kit.ch[c].s("vol")
                     if pk < 1e-4:
                         continue
                     new = int(round(vol * TARGET_PEAK[c] / pk))
                     if new > 127 and pk < 0.75 * TARGET_PEAK[c]:
-                        drv = kit.ch[c].block[L["DRIVE"]]
-                        kit.ch[c].set(drive=min(90, drv + 25))
+                        kit.ch[c].set(drive=min(90, kit.ch[c].s("drive") + 25))
                     kit.ch[c].set(vol=max(20, min(127, new)))
-            m = render(kit, path, os.path.join(demo_dir, f"{slot:03d}_{kit.name}.wav") if i < 3 else "")
-            report.append((slot, kit.name, kit.bpm, [c.engine for c in kit.ch], m["mix_peak"],
-                           [round(x, 2) for x in m["peak"]], kit.fx["type"], m["tail"]))
+            # output stage: no clipping on the outputs, peaks around -1 dB;
+            # the compressor / distortion level makes up for what the FX eats
+            for _ in range(8):
+                m = render(kit, path)
+                op, clip = m["out_peak"], m["clip"]
+                if clip > 0 or op > 0.97:
+                    scale = (0.85 if clip > 20 else 0.92) * min(1.0, 0.95 / op)
+                elif op < 0.78:
+                    if kit.fx["type"] in ("cmp", "drv") and kit.fx["p"][3] < 127:
+                        kit.fx["p"][3] = min(127, kit.fx["p"][3] + 15)
+                    scale = min(0.9 / max(op, 1e-3), 1.4)
+                else:
+                    break
+                for c in kit.ch:
+                    c.set(vol=max(10, min(127, int(round(c.s("vol") * scale)))))
+            wav = os.path.join(demo_dir, f"{slot:03d}_{kit.name}.wav") if i % 4 == 0 else ""
+            m = render(kit, path, wav)
+            fam = family_count(kit)
+            report.append(dict(slot=slot, name=kit.name, family=family, flavor=kit.flavor, bpm=kit.bpm,
+                               engines=[c.engine for c in kit.ch], fx=kit.fx["type"], mix=m["out_peak"], clip=m["clip"],
+                               tail=m["tail"], peaks=[round(x, 2) for x in m["peak"]], fixed=fixed,
+                               notes=kit.notes, fam=fam))
+            print(f"{slot:3d} {kit.name:8s} {family} {kit.flavor:7s} {' '.join(c.engine for c in kit.ch)} "
+                  f"fx={kit.fx['type']} fix={fixed} out={m['out_peak']:.2f} clip={m['clip']} tail={m['tail']:.4f}", flush=True)
             slot += 1
     with open(os.path.join(OUT, "bank.txt"), "w") as f:
-        for s, name, bpm, engines, mp, peaks, fx, tail in report:
-            f.write(f"{s:3d} {name:8s} {bpm:3d}bpm  {' '.join(f'{e:3s}' for e in engines)}  fx={fx:3s}  "
-                    f"mix={mp:.2f} tail={tail:.4f} peaks={peaks}\n")
-    print(f"{slot} kits written to {kit_dir}")
+        for k in report:
+            f.write(f"{k['slot']:3d} {k['name']:8s} {k['family']} {k['flavor']:7s} {k['bpm']:3d}bpm  "
+                    f"{' '.join(f'{e:3s}' for e in k['engines'])}  fx={k['fx']:3s} {' '.join(k['notes'])}  "
+                    f"out={k['mix']:.2f} clip={k['clip']} tail={k['tail']:.4f} fix={k['fixed']} peaks={k['peaks']}\n")
+    with open(os.path.join(OUT, "bank.json"), "w") as f:
+        json.dump(report, f, indent=1)
+    with open(os.path.join(OUT, "fixlog.txt"), "w") as f:
+        f.write("\n".join(log) + "\n")
+    print(f"{len(report)} kits written to {kit_dir}")
 
 
 main()

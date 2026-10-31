@@ -36,4 +36,9 @@ uint8_t shui_maxValue(uint16_t parNr);
 void shui_modDestShort(uint8_t dest, char* out3);
 void shui_modDestFull(uint8_t dest, char* row16);
 
+/* 1 if the destination can be selected (global, V/Oct or a slot in use) */
+uint8_t shui_modDestValid(uint8_t dest);
+/* move |inc| selectable destinations up or down, skipping unused slots */
+uint8_t shui_modDestStep(uint8_t cur, int16_t inc);
+
 #endif /* SH_UI_H_ */

@@ -93,17 +93,41 @@ enum { SH_AEG_AD = 0, SH_AEG_OFF, SH_NUM_AEG_MODES };
 #define SH_NUM_FILTER_TYPES 8
 
 /* Modulation targets (CV matrix destinations).
- * A destination value is 0 (none) or 1 + ch * SH_MOD_TARGETS_PER_CH + t,
- * where t indexes sh_modTargetLocal[]. The special target SH_MODT_VOCT adds
- * exact 1V/oct pitch instead of modulating a stored parameter. */
-#define SH_MOD_TARGETS_PER_CH 42
+ *
+ * A destination value is
+ *   0                         none
+ *   1 .. SH_MOD_GLOBALS       global targets (morph, FX bus), see ShModGlobal
+ *   SH_MOD_CH_BASE + ch * SH_MOD_TARGETS_PER_CH + t
+ *                             channel targets, t indexes sh_modTargetLocal[]
+ * The special channel target SH_MODT_VOCT adds exact 1V/oct pitch instead of
+ * modulating a stored parameter.
+ *
+ * Kit format 1 (SHARD 0.1/0.2) had no global targets and 42 targets per
+ * channel; sh_kitFixup() converts such kits on load. */
+enum ShModGlobal
+{
+	SH_MODG_MORPH = 0,   /* morph amount */
+	SH_MODG_MTARGET,     /* morph target kit */
+	SH_MODG_MSHAPE,      /* morph shape */
+	SH_MODG_FX_WET,
+	SH_MODG_FX_P1,
+	SH_MODG_FX_P2,
+	SH_MODG_FX_P3,
+	SH_MODG_FX_P4,
+	SH_MOD_GLOBALS
+};
+#define SH_MOD_CH_BASE (1 + SH_MOD_GLOBALS)
+#define SH_MOD_TARGETS_PER_CH 27
+#define SH_MOD_ENGINE_TARGETS 14   /* E0..E13; no engine uses more */
 #define SH_MODT_VOCT 0xFF
-#define SH_NUM_MOD_DESTS (1 + SH_NUM_CHANNELS * SH_MOD_TARGETS_PER_CH)
+#define SH_NUM_MOD_DESTS (SH_MOD_CH_BASE + SH_NUM_CHANNELS * SH_MOD_TARGETS_PER_CH)
 extern const uint8_t sh_modTargetLocal[SH_MOD_TARGETS_PER_CH];
 
-static inline uint8_t sh_modDestChannel(uint8_t dest) { return (uint8_t)((dest - 1) / SH_MOD_TARGETS_PER_CH); }
-static inline uint8_t sh_modDestLocal(uint8_t dest) { return sh_modTargetLocal[(dest - 1) % SH_MOD_TARGETS_PER_CH]; }
-static inline uint8_t sh_modDestMake(uint8_t ch, uint8_t t) { return (uint8_t)(1 + ch * SH_MOD_TARGETS_PER_CH + t); }
+static inline uint8_t sh_modDestIsGlobal(uint8_t dest) { return dest >= 1 && dest < SH_MOD_CH_BASE; }
+static inline uint8_t sh_modDestGlobal(uint8_t dest) { return (uint8_t)(dest - 1); }
+static inline uint8_t sh_modDestChannel(uint8_t dest) { return (uint8_t)((dest - SH_MOD_CH_BASE) / SH_MOD_TARGETS_PER_CH); }
+static inline uint8_t sh_modDestLocal(uint8_t dest) { return sh_modTargetLocal[(dest - SH_MOD_CH_BASE) % SH_MOD_TARGETS_PER_CH]; }
+static inline uint8_t sh_modDestMake(uint8_t ch, uint8_t t) { return (uint8_t)(SH_MOD_CH_BASE + ch * SH_MOD_TARGETS_PER_CH + t); }
 
 #ifdef __cplusplus
 }

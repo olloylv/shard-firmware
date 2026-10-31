@@ -8,6 +8,7 @@
 #include "Shard/sh_ui.h"
 #include "Shard/sh_engine.h"
 #include "Shard/sh_bridge.h"
+#include "Shard/sh_morph.h"
 #include "Parameters.h"
 
 #include <string.h>
@@ -31,6 +32,7 @@ static const char filterNames[][4] = { "off", "LP ", "HP ", "BP ", "UBP", "Nch",
 static const char outNames[][4]    = { "St1", "St2", "L1 ", "R1 ", "L2 ", "R2 ", "FX " };
 static const char lfoWaves[][4]    = { "sin", "tri", "sup", "sdn", "sqr", "rnd", "xup", "xdn" };
 static const char retrigNames[][4] = { "off", "c1 ", "c2 ", "c3 ", "c4 ", "c5 ", "c6 " };
+static const char morphAlgs[SH_NUM_MORPH_ALGS][4] = { "lin", "snp", "sct", "stp" };
 static const char noteNames[][3]   = { "C ", "C#", "D ", "D#", "E ", "F ", "F#", "G ", "G#", "A ", "A#", "B " };
 
 /* strip parameters, indexed by local parameter number (engine slots excluded) */
@@ -123,7 +125,8 @@ uint8_t shui_handles(uint16_t parNr)
 {
 	uint8_t ch, local;
 	return par_isChannelParam(parNr, &ch, &local)
-		|| parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU;
+		|| parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU
+		|| parNr == PAR_SH_MORPH_ALG || parNr == PAR_SH_MORPH_SHP;
 }
 
 uint8_t shui_isUsed(uint16_t parNr)
@@ -140,6 +143,8 @@ void shui_shortName(uint16_t parNr, char* out3)
 	/* lower case like the LXR names; the menu capitalises the selected one */
 	if(parNr == PAR_SH_UPDATE) { memcpy(out3, "upd", 3); return; }
 	if(parNr == PAR_SH_CPU) { memcpy(out3, "cpu", 3); return; }
+	if(parNr == PAR_SH_MORPH_ALG) { memcpy(out3, "alg", 3); return; }
+	if(parNr == PAR_SH_MORPH_SHP) { memcpy(out3, "shp", 3); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) { memcpy(out3, "   ", 3); return; }
 	putText(out3, pi.engine ? pi.engine->shortName : pi.strip->shortName, 3);
@@ -152,6 +157,8 @@ void shui_editTop(uint16_t parNr, char* row16)
 	memset(row16, ' ', 16);
 	if(parNr == PAR_SH_UPDATE) { memcpy(row16, "Firmware Update", 15); return; }
 	if(parNr == PAR_SH_CPU) { memcpy(row16, "Audio CPU load", 14); return; }
+	if(parNr == PAR_SH_MORPH_ALG) { memcpy(row16, "Morph   Algorith", 16); return; }
+	if(parNr == PAR_SH_MORPH_SHP) { memcpy(row16, "Morph   Sharpnes", 16); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) return;
 	/* "C1 aBD  Decay   " or "C1 FLT  Cutoff  " */
@@ -189,6 +196,8 @@ void shui_valueShort(uint16_t parNr, uint8_t value, char* out3)
 {
 	if(parNr == PAR_SH_UPDATE) { memcpy(out3, "go ", 3); return; }
 	if(parNr == PAR_SH_CPU) { putNum(out3, sh_cpuLoadPercent()); return; }
+	if(parNr == PAR_SH_MORPH_ALG) { putText(out3, morphAlgs[value < SH_NUM_MORPH_ALGS ? value : 0], 3); return; }
+	if(parNr == PAR_SH_MORPH_SHP) { putNum(out3, value); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) { memcpy(out3, "   ", 3); return; }
 	if(pi.engine)
@@ -210,6 +219,15 @@ void shui_editBottom(uint16_t parNr, uint8_t value, char* row16)
 {
 	memset(row16, ' ', 16);
 	if(parNr == PAR_SH_UPDATE) { memcpy(row16, "push encoder", 12); return; }
+	if(parNr == PAR_SH_MORPH_ALG)
+	{
+		static const char longAlgs[SH_NUM_MORPH_ALGS][13] =
+			{ "linear+over ", "snap S-curve", "scatter     ", "steps       " };
+		const uint8_t a = value < SH_NUM_MORPH_ALGS ? value : 0;
+		putText(row16, longAlgs[a], 12);
+		putText(&row16[13], morphAlgs[a], 3);
+		return;
+	}
 	ParInfo pi;
 	if(lookup(parNr, &pi) && pi.strip && pi.strip->type == SPT_ENGINE)
 	{
@@ -226,6 +244,8 @@ void shui_editBottom(uint16_t parNr, uint8_t value, char* row16)
 uint8_t shui_maxValue(uint16_t parNr)
 {
 	if(parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU) return 0;
+	if(parNr == PAR_SH_MORPH_ALG) return SH_NUM_MORPH_ALGS - 1;
+	if(parNr == PAR_SH_MORPH_SHP) return 127;
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) return 127;
 	if(pi.engine)
@@ -243,14 +263,48 @@ uint8_t shui_maxValue(uint16_t parNr)
 }
 
 //------------------------------------------------------------------------
+static const char globalShort[SH_MOD_GLOBALS][4] = { "Mrp", "Mtg", "Msh", "Fwt", "Fx1", "Fx2", "Fx3", "Fx4" };
+static const char globalLong[SH_MOD_GLOBALS][17] =
+{
+	"MORPH   Amount  ", "MORPH   Target  ", "MORPH   Sharpnes", "FX      Dry/Wet ",
+	"FX      Param 1 ", "FX      Param 2 ", "FX      Param 3 ", "FX      Param 4 ",
+};
+
+uint8_t shui_modDestValid(uint8_t dest)
+{
+	if(dest == 0) return 1;
+	if(dest >= SH_NUM_MOD_DESTS) return 0;
+	if(sh_modDestIsGlobal(dest)) return 1;
+	const uint8_t local = sh_modDestLocal(dest);
+	if(local == SH_MODT_VOCT) return 1;
+	return shui_isUsed(PAR_CH(sh_modDestChannel(dest), local));
+}
+
+uint8_t shui_modDestStep(uint8_t cur, int16_t inc)
+{
+	int v = cur < SH_NUM_MOD_DESTS ? cur : SH_NUM_MOD_DESTS - 1;
+	const int dir = inc > 0 ? 1 : -1;
+	int n = inc > 0 ? inc : -inc;
+	while(n-- > 0)
+	{
+		int w = v + dir;
+		while(w > 0 && w < SH_NUM_MOD_DESTS && !shui_modDestValid((uint8_t)w)) w += dir;
+		if(w < 0 || w >= SH_NUM_MOD_DESTS) break;
+		v = w;
+	}
+	return (uint8_t)v;
+}
+
 void shui_modDestShort(uint8_t dest, char* out3)
 {
 	if(dest == 0 || dest >= SH_NUM_MOD_DESTS) { memcpy(out3, "off", 3); return; }
+	if(sh_modDestIsGlobal(dest)) { memcpy(out3, globalShort[sh_modDestGlobal(dest)], 3); return; }
 	const uint8_t ch = sh_modDestChannel(dest);
 	const uint8_t local = sh_modDestLocal(dest);
 	/* first character: channel number, then two letters of the name */
 	out3[0] = (char)('1' + ch);
 	if(local == SH_MODT_VOCT) { memcpy(&out3[1], "VO", 2); return; }
+	if(!shui_isUsed(PAR_CH(ch, local))) { memcpy(&out3[1], "--", 2); return; }
 	char name[3];
 	shui_shortName(PAR_CH(ch, local), name);
 	out3[1] = name[0];
@@ -261,6 +315,7 @@ void shui_modDestFull(uint8_t dest, char* row16)
 {
 	memset(row16, ' ', 16);
 	if(dest == 0 || dest >= SH_NUM_MOD_DESTS) { memcpy(row16, "off", 3); return; }
+	if(sh_modDestIsGlobal(dest)) { memcpy(row16, globalLong[sh_modDestGlobal(dest)], 16); return; }
 	const uint8_t ch = sh_modDestChannel(dest);
 	const uint8_t local = sh_modDestLocal(dest);
 	if(local == SH_MODT_VOCT)
@@ -273,4 +328,5 @@ void shui_modDestFull(uint8_t dest, char* row16)
 	char top[16];
 	shui_editTop(PAR_CH(ch, local), top);
 	memcpy(row16, top, 16);
+	if(!shui_isUsed(PAR_CH(ch, local))) memcpy(&row16[8], "(unused)", 8);
 }

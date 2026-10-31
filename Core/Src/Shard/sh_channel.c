@@ -11,6 +11,7 @@
  * processing.
  */
 #include "Shard/sh_channel.h"
+#include "Shard/sh_morph.h"
 #include "Shard/sh_engine.h"
 
 #include <math.h>
@@ -26,16 +27,13 @@
 #define SH_LFO_SR (SH_SAMPLE_RATE / (float)SH_BLOCK_SIZE)
 #define SH_LFO_MAX_F 200.f
 
-/* the 42 parameters of a channel that the CV matrix can reach */
+/* the parameters of a channel that the CV matrix can reach */
 const uint8_t sh_modTargetLocal[SH_MOD_TARGETS_PER_CH] =
 {
 	SH_MODT_VOCT,
 	SHP_E0 + 0,  SHP_E0 + 1,  SHP_E0 + 2,  SHP_E0 + 3,  SHP_E0 + 4,
 	SHP_E0 + 5,  SHP_E0 + 6,  SHP_E0 + 7,  SHP_E0 + 8,  SHP_E0 + 9,
-	SHP_E0 + 10, SHP_E0 + 11, SHP_E0 + 12, SHP_E0 + 13, SHP_E0 + 14,
-	SHP_E0 + 15, SHP_E0 + 16, SHP_E0 + 17, SHP_E0 + 18, SHP_E0 + 19,
-	SHP_E0 + 20, SHP_E0 + 21, SHP_E0 + 22, SHP_E0 + 23, SHP_E0 + 24,
-	SHP_E0 + 25, SHP_E0 + 26, SHP_E0 + 27, SHP_E0 + 28,
+	SHP_E0 + 10, SHP_E0 + 11, SHP_E0 + 12, SHP_E0 + 13,
 	SHP_ATTACK, SHP_DECAY, SHP_SLOPE,
 	SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_DRIVE,
 	SHP_VOL, SHP_PAN, SHP_SRATE, SHP_DRIVE, SHP_BITS,
@@ -82,7 +80,8 @@ typedef struct
 static ShChannel channels[SH_NUM_CHANNELS];
 static uint8_t* paramBase;
 static const uint8_t* morphTarget;
-static uint8_t morphAmount;
+static uint8_t meterOn;
+static uint16_t meterPeak[SH_NUM_CHANNELS];
 
 static inline uint8_t* block(uint8_t ch) { return paramBase + ch * SH_CH_STRIDE; }
 
@@ -331,10 +330,21 @@ static void handleTrigger(uint8_t ch, ShChannel* c, const uint8_t* p, ShRenderIn
 }
 
 //------------------------------------------------------------------------
-void sh_channelsMorph(const uint8_t* target, uint8_t amount)
+void sh_channelsMorph(const uint8_t* target)
 {
 	morphTarget = target;
-	morphAmount = target ? amount : 0;
+}
+
+void sh_meterEnable(uint8_t on)
+{
+	meterOn = on;
+}
+
+uint16_t sh_meterTake(uint8_t ch)
+{
+	const uint16_t v = meterPeak[ch];
+	meterPeak[ch] = 0;
+	return v;
 }
 
 static uint8_t isSteppedLocal(uint8_t local, const ShEngineInfo* info)
@@ -355,25 +365,32 @@ static uint8_t isSteppedLocal(uint8_t local, const ShEngineInfo* info)
 	return 0;
 }
 
-/* interpolated view of a channel block between the live kit and the morph
- * target (like preset_getMorphValue in the LXR firmware) */
-static void morphView(const uint8_t* src, const uint8_t* dst, uint8_t* view)
+uint8_t sh_isSteppedLocal(uint8_t local, uint8_t engine)
 {
-	const uint8_t m = morphAmount;
+	return isSteppedLocal(local, sh_engineInfo(engine < sh_engineCount() ? engine : 0));
+}
+
+/* morphed view of a channel block between the live kit and the morph
+ * target, using the curves of sh_morph.c */
+static void morphView(uint8_t ch, const uint8_t* src, const uint8_t* dst, uint8_t* view)
+{
+	const uint16_t base = (uint16_t)(1 + ch * SH_CH_STRIDE);   /* = PAR_CH(ch, 0) */
 	if(src[SHP_ENGINE] != dst[SHP_ENGINE])
 	{
-		/* different engines: switch over half way */
-		memcpy(view, m >= 128 ? dst : src, SH_CH_STRIDE);
+		/* different engines: the whole block switches with the engine */
+		memcpy(view, sh_morphStepped(0, 1, base + SHP_ENGINE) ? dst : src, SH_CH_STRIDE);
 	}
 	else
 	{
 		const ShEngineInfo* info = sh_engineInfo(src[SHP_ENGINE]);
 		for(uint8_t i = 0; i < SHP_LOCAL_COUNT; i++)
 		{
-			if(isSteppedLocal(i, info))
-				view[i] = m >= 128 ? dst[i] : src[i];
+			if(src[i] == dst[i])
+				view[i] = src[i];
+			else if(isSteppedLocal(i, info))
+				view[i] = sh_morphStepped(src[i], dst[i], (uint16_t)(base + i));
 			else
-				view[i] = (uint8_t)((src[i] * (255 - m) + dst[i] * m + 127) / 255);
+				view[i] = sh_morphContinuous(src[i], dst[i], (uint16_t)(base + i), 127);
 		}
 	}
 	/* audio routing is never morphed */
@@ -386,9 +403,9 @@ void sh_channelRender(uint8_t ch, int16_t* buf)
 	ShChannel* c = &channels[ch];
 	const uint8_t* p = block(ch);
 	uint8_t view[SH_CH_STRIDE];
-	if(morphAmount)
+	if(morphTarget && sh_morphActive())
 	{
-		morphView(p, morphTarget + ch * SH_CH_STRIDE, view);
+		morphView(ch, p, morphTarget + ch * SH_CH_STRIDE, view);
 		p = view;
 	}
 
@@ -508,5 +525,18 @@ void sh_channelRender(uint8_t ch, int16_t* buf)
 		const uint8_t s = c->bitShift;
 		for(uint8_t i = 0; i < SH_BLOCK_SIZE; i++)
 			buf[i] = (int16_t)((buf[i] >> s) << s);
+	}
+
+	/* level meter for the screensaver */
+	if(meterOn)
+	{
+		uint16_t pk = meterPeak[ch];
+		for(uint8_t i = 0; i < SH_BLOCK_SIZE; i += 4)
+		{
+			const int16_t x = buf[i];
+			const uint16_t a = (uint16_t)(x < 0 ? -x : x);
+			if(a > pk) pk = a;
+		}
+		meterPeak[ch] = pk;
 	}
 }
