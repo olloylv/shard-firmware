@@ -126,7 +126,7 @@ float midiParser_calcDetune(uint8_t value)
 	return cent;
 }
 //-----------------------------------------------------------
-static void midiParser_nrpnHandler(uint16_t value)
+__attribute__((unused)) static void midiParser_nrpnHandler(uint16_t value)
 {
 	MidiMsg msg2;
 	msg2.status = MIDI_CC2;
