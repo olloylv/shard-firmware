@@ -27,7 +27,7 @@ void FxBus_init()
 	fxBus.delay.delayType = DELAY_NORMAL;
 
 	Distortion_init(&fxBus.distortion);
-	Ringmod_init(&fxBus.ringmod);
+	Glitch_init(&fxBus.glitch);
 	Compressor_init(&fxBus.compressor);
 	Delay_init(&fxBus.delay);
 
@@ -106,8 +106,8 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 		Distortion_process(&fxBus.distortion, fxBuffer, out, out2, size, channels, fxBus.dryWet);
 		break;
 
-	case FX_RING:
-		Ringmod_process(&fxBus.ringmod, fxBuffer, out, out2, size, channels, fxBus.dryWet);
+	case FX_GLITCH:
+		Glitch_process(&fxBus.glitch, fxBuffer, out, out2, size, channels, fxBus.dryWet);
 		break;
 
 	case FX_COMPRESSOR:
@@ -134,6 +134,11 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 
 }
 
+void FxBus_onTrigger(void)
+{
+	if(fxBus.fxType == FX_GLITCH) Glitch_trigger(&fxBus.glitch);
+}
+
 void FxBus_prepareFxChange()
 {
 	//memset(FX_BUFFER, 0, FX_BUFFER_SIZE*sizeof(__fp16) );
@@ -155,9 +160,8 @@ IN_ITCM_RAM void FxBus_updateParameter()
 		Distortion_setParam3(&fxBus.distortion, fxBus.parameter[3] );
 		break;
 
-	case FX_RING:
-		Ringmod_setFreq(&fxBus.ringmod, fxBus.parameter[0] );
-		//Ringmod_setWave(&fxBus.ringmod, fxBus.parameter[1] );
+	case FX_GLITCH:
+		Glitch_setParams(&fxBus.glitch, fxBus.parameter[0], fxBus.parameter[1], fxBus.parameter[2], fxBus.parameter[3]);
 		break;
 
 	case FX_COMPRESSOR:

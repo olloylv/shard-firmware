@@ -23,6 +23,7 @@ add_executable(shard_render
   # SHARD
   ${CORE}/Src/Shard/sh_channel.c
   ${CORE}/Src/Shard/sh_morph.c
+  ${CORE}/Src/Shard/sh_bridge.c
   ${CORE}/Src/Shard/engines/engines.cc
   ${CORE}/Src/Shard/engines/lxr_engines.cc
   ${CORE}/Src/Shard/engines/plaits_engines.cc
@@ -58,7 +59,7 @@ add_executable(shard_render
   ${DSP}/FX/FxRamBuffer.c
   ${DSP}/FX/Reverb.c
   ${DSP}/TiltEq.c
-  ${DSP}/FX/Ringmod.c
+  ${DSP}/FX/Glitch.c
   ${DSP}/FX/VerbTools/AllpassDelay.c
   ${DSP}/FX/VerbTools/sinCos.c
   ${DSP}/FX/VerbTools/VerbDelay.c

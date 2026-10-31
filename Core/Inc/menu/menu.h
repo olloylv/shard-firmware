@@ -278,6 +278,10 @@ enum NamesEnum
 	TEXT_CV_SAVE,
 	TEXT_MORPH_TARGET,
 	TEXT_SH_DYN,		/* SHARD: name comes from Shard/sh_ui.c */
+	TEXT_FX_GLEN,		/* SHARD: glitch FX */
+	TEXT_FX_GCHANCE,
+	TEXT_FX_GVAR,
+	TEXT_FX_GREP,
 
 	NUM_NAMES
 };
@@ -391,6 +395,10 @@ enum shortNamesEnum
 	SHORT_1VOCT,
 	SHORT_CV,
 	SHORT_MORPH_TARGET,
+	SHORT_GLEN,
+	SHORT_GCHANCE,
+	SHORT_GVAR,
+	SHORT_GREP,
 
 	
 };
@@ -524,7 +532,11 @@ enum longNamesEnum
 	LONG_SRC,
 	LONG_1VOCT,
 	LONG_CV,
-	LONG_MORPH_TARGET
+	LONG_MORPH_TARGET,
+	LONG_GLEN,
+	LONG_GCHANCE,
+	LONG_GVAR,
+	LONG_GREP
 	
 };
 

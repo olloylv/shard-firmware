@@ -261,6 +261,10 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_CV, CAT_GLOBAL, LONG_CV},/*TEXT_CV_SAVE*/
 		{SHORT_MORPH_TARGET, CAT_SOUND, LONG_MORPH_TARGET},/*TEXT_MORPH_TARGET*/
 		{SHORT_EMPTY,CAT_EMPTY,LONG_EMPTY},					/*TEXT_SH_DYN*/
+		{SHORT_GLEN, CAT_FX, LONG_GLEN},					/*TEXT_FX_GLEN*/
+		{SHORT_GCHANCE, CAT_FX, LONG_GCHANCE},				/*TEXT_FX_GCHANCE*/
+		{SHORT_GVAR, CAT_FX, LONG_GVAR},					/*TEXT_FX_GVAR*/
+		{SHORT_GREP, CAT_FX, LONG_GREP},					/*TEXT_FX_GREP*/
 
 
 
@@ -339,6 +343,10 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	[PAR_CV_SRC_16] = DTYPE_MENU | (MENU_CV_SRC<<8),
 	[PAR_CV_SRC_17] = DTYPE_MENU | (MENU_CV_SRC<<8),
 	[PAR_CV_SRC_18] = DTYPE_MENU | (MENU_CV_SRC<<8),
+	/* SHARD: slots 4..6 of every channel */
+	[PAR_CV2_DEST_1 ... PAR_CV2_AMT_1 - 1] = DTYPE_TARGET_SELECTION_CV,
+	[PAR_CV2_AMT_1 ... PAR_CV2_SRC_1 - 1] = DTYPE_0B100,
+	[PAR_CV2_SRC_1 ... PAR_CV2_END - 1] = DTYPE_MENU | (MENU_CV_SRC<<8),
 
 	[PAR_ROLL] = 			DTYPE_MENU | (MENU_ROLL_RATES<<8),
 	    /*PAR_MORPH*/ 			DTYPE_0B255,
@@ -369,6 +377,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_SH_CPU*/			DTYPE_SH,
 	    /*PAR_SH_MORPH_ALG*/	DTYPE_SH,
 	    /*PAR_SH_MORPH_SHP*/	DTYPE_SH,
+	    /*PAR_SH_IDLE*/			DTYPE_SH,
 	    /*PAR_BPM*/ 			DTYPE_0B255,							//251
 	    /*PAR_MIDI_CHAN_1*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_2*/ 	DTYPE_1B16,
@@ -379,7 +388,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	   /*PAR_CV_SAVE*/ 			DTYPE_MENU| (MENU_CV_SAVE<<8),
 	    /*PAR_FOLLOW*/ 			DTYPE_ON_OFF,//DTYPE_MENU | (MENU_FOLLOW<<8),
 	    /*PAR_QUANTISATION*/ 	DTYPE_MENU | (MENU_SEQ_QUANT<<8),
-	    /*PAR_SCREENSAVER_ON_OFF*/ DTYPE_ON_OFF,						//261
+	    /*PAR_SCREENSAVER_ON_OFF*/ DTYPE_SH,						//261
 	    /*PAR_MIDI_MODE*/ 		DTYPE_MENU | (MENU_MIDI<<8),			  // This is now unused.
 	    /*PAR_MIDI_CHAN_7*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_ROUTING*/	DTYPE_MENU | (MENU_MIDI_ROUTING<<8),
@@ -822,6 +831,16 @@ uint8_t sendDisplayBuffer()
 //-----------------------------------------------------------------
 void menu_tick()
 {
+	//SHARD: live values (cpu, idle time) on the global page
+	{
+		static uint32_t lastLive;
+		if(menu_activePage == MENU_MIDI_PAGE && (systick_ticks - lastLive) > 500
+				&& !screensaver_Active && display_refresh_state == 0)
+		{
+			lastLive = systick_ticks;
+			menu_repaint();
+		}
+	}
 
 	if((menu_activePage == PATTERN_SAVE_PAGE_OK) || (menu_activePage == KIT_SAVE_PAGE_OK))
 	{
@@ -2722,7 +2741,11 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 			const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
 			if(pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter) == PAR_SH_UPDATE)
 			{
+				//the menu must not draw from the timer interrupt meanwhile
+				lcd_process_display_interrupt = 0;
+				while(sendDisplayBuffer() != 0);
 				shupd_menu();
+				lcd_process_display_interrupt = 1;
 				lastEncoderButton = 0;
 				lcd_clear();
 				menu_repaintAll();
@@ -2752,7 +2775,7 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 	} else if(inc==0)
 		return; // nothing has changed. do nothing
 
-	screensaver_touch();
+	screensaver_touchFrom('e', 0);
 
 	//invert encoder
 	//inc = (int8_t)(inc * -1);
@@ -3910,7 +3933,29 @@ uint8_t menu_getDisplayParameterType(uint8_t pos)
 //-----------------------------------------------------------------
 uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 {
-	screensaver_touch();
+	//SHARD: a single step of an endless pot can be noise. Only two or more
+	//steps in the same direction within 400 ms count as a touch (screensaver);
+	//while the screensaver runs the pot only wakes the menu.
+	{
+		static uint32_t lastTime[4];
+		static int8_t lastDir[4];
+		static uint8_t steps[4];
+		const uint32_t now = HAL_GetTick();
+		const int8_t dir = diff > 0 ? 1 : -1;
+		if(potNr < 4)
+		{
+			if(now - lastTime[potNr] > 400 || dir != lastDir[potNr]) steps[potNr] = 0;
+			lastTime[potNr] = now;
+			lastDir[potNr] = dir;
+			if(steps[potNr] < 255) steps[potNr]++;
+			if(screensaver_Active)
+			{
+				if(steps[potNr] >= 2) screensaver_touchFrom('p', potNr);
+				return 0;
+			}
+			if(steps[potNr] >= 2) screensaver_touchFrom('p', potNr);
+		}
+	}
 	preset_touchTimer(PRESET_KIT_TIMER);
 
 	const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;

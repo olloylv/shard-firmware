@@ -82,7 +82,7 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/FX/Distortion.c
     Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
     Src/Soundengine/DSPAudio/FX/Reverb.c
-    Src/Soundengine/DSPAudio/FX/Ringmod.c
+    Src/Soundengine/DSPAudio/FX/Glitch.c
     Src/Soundengine/DSPAudio/FX/VerbTools/AllpassDelay.c
     Src/Soundengine/DSPAudio/FX/VerbTools/sinCos.c
     Src/Soundengine/DSPAudio/FX/VerbTools/VerbDelay.c

@@ -27,7 +27,7 @@ project(LXR_V2_STM32F765_Eurorack
 
 # SHARD: unofficial firmware based on the LXR firmware. Its own version is shown
 # on the start-up screen together with the LXR base version above.
-set(SHARD_VERSION "0.3")
+set(SHARD_VERSION "0.4")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)

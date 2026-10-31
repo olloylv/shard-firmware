@@ -1841,7 +1841,7 @@ void buttonHandler_voiceButtonReleased(uint8_t voiceNr)
 //--------------------------------------------------------
 void buttonHandler_buttonPressed(uint8_t buttonNr) {
 
-	screensaver_touch();
+	screensaver_touchFrom('b', buttonNr);
 
 
 	//------------------------------------------------------

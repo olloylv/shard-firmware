@@ -36,6 +36,15 @@
 #define PAR_CH(ch, local) (PAR_CH_BASE + (ch) * SH_CH_STRIDE + (local))
 #define PAR_CH_END PAR_CH(SH_NUM_CHANNELS, 0)
 
+/* CV matrix: 6 slots per channel. Slot s (0..5) of channel ch has index
+ * i = s < 3 ? ch * 3 + s : 18 + ch * 3 + s - 3 and lives in these params */
+#define SH_CV_SLOTS_PER_CH 6
+#define SH_NUM_CV_SLOTS 36
+#define SH_CV_SLOT(ch, s) ((s) < 3 ? (ch) * 3 + (s) : 18 + (ch) * 3 + (s) - 3)
+#define PAR_CVS_DEST(i) ((i) < 18 ? PAR_CV_DEST_1 + (i) : PAR_CV2_DEST_1 + (i) - 18)
+#define PAR_CVS_AMT(i)  ((i) < 18 ? PAR_CV_MOD_AMT_1 + (i) : PAR_CV2_AMT_1 + (i) - 18)
+#define PAR_CVS_SRC(i)  ((i) < 18 ? PAR_CV_SRC_1 + (i) : PAR_CV2_SRC_1 + (i) - 18)
+
 /* is paramNr inside the channel blocks; if so return channel and local index */
 static inline uint8_t par_isChannelParam(uint16_t paramNr, uint8_t* ch, uint8_t* local)
 {
@@ -120,6 +129,13 @@ enum ParamEnums
 	PAR_CV_SRC_16,
 	PAR_CV_SRC_17,
 	PAR_CV_SRC_18,
+	/* SHARD: slots 4..6 of every channel (appended, so older kit files still
+	 * load: their missing bytes are zero = slots off) */
+	PAR_CV2_DEST_1,
+	PAR_CV2_AMT_1 = PAR_CV2_DEST_1 + 18,
+	PAR_CV2_SRC_1 = PAR_CV2_AMT_1 + 18,
+	PAR_CV2_END = PAR_CV2_SRC_1 + 18,
+	PAR_CV2_LAST = PAR_CV2_END - 1,
 	//#########################################
 	//######## End of sound Parameters ########
 	//#########################################
@@ -171,6 +187,7 @@ enum ParamEnums
 	PAR_SH_CPU,						// SHARD: audio CPU load display
 	PAR_SH_MORPH_ALG,				// SHARD: morph algorithm (sh_morph.h)
 	PAR_SH_MORPH_SHP,				// SHARD: morph sharpness
+	PAR_SH_IDLE,					// SHARD: screensaver diagnostics (time since last touch)
 	PAR_BEGINNING_OF_GLOBALS, //a placeholder to mark the beginning of the global var space not present in morph and not needed in the seq
 	//global params
 	PAR_BPM = PAR_BEGINNING_OF_GLOBALS,	/*250*/

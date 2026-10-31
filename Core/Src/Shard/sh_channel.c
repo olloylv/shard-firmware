@@ -23,6 +23,7 @@
 #include "Soundengine/DSPAudio/1PoleLp.h"
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/random.h"
+#include "Soundengine/FxBus.h"
 
 #define SH_LFO_SR (SH_SAMPLE_RATE / (float)SH_BLOCK_SIZE)
 #define SH_LFO_MAX_F 200.f
@@ -185,6 +186,9 @@ void sh_trigger(uint8_t ch, uint8_t vel, uint8_t alt)
 	channels[ch].trigVel = vel;
 	channels[ch].trigAlt = alt;
 	channels[ch].trigPending = 1;
+	/* the glitch FX starts its events on hits of the channels it hears */
+	if(block(ch)[SHP_OUT] == 6)   /* MIXER_ROUTING_FX_BUS */
+		FxBus_onTrigger();
 }
 
 //------------------------------------------------------------------------

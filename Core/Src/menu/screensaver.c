@@ -70,6 +70,16 @@ uint8_t screensaver_pseudoRng()
 	return (screensaver_rng >> 2) & 0xFF;
 }
 //------------------------------------------------------------------
+volatile char screensaver_lastKind = '-';
+volatile uint8_t screensaver_lastIdx;
+
+void screensaver_touchFrom(char kind, uint8_t idx)
+{
+	screensaver_lastKind = kind;
+	screensaver_lastIdx = idx;
+	screensaver_touch();
+}
+
 void screensaver_touch()
 {
 	screensaver_timer = 0;
@@ -564,6 +574,10 @@ void screensaver_check()
 {
 	if(activeParameters[PAR_SCREENSAVER_ON_OFF])
 	{
+		/* SHARD: timeout from the ssv setting: 2 min, 5 min, 30 s, 10 s */
+		static const uint32_t timeouts[5] = { 0, 120000, 300000, 30000, 10000 };
+		const uint8_t v = activeParameters[PAR_SCREENSAVER_ON_OFF];
+		screensaver_Timeout = timeouts[v < 5 ? v : 1];
 		if( (!screensaver_Active) )
 		{
 			if(screensaver_timer >= screensaver_Timeout)

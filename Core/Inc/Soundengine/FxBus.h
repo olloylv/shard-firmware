@@ -18,7 +18,7 @@
 #include "Soundengine/globals.h"
 #include "Soundengine/config.h"
 #include "Soundengine/DSPAudio/FX/Distortion.h"
-#include "Soundengine/DSPAudio/FX/Ringmod.h"
+#include "Soundengine/DSPAudio/FX/Glitch.h"
 #include "Soundengine/DSPAudio/FX/Compressor.h"
 #include "Soundengine/DSPAudio/FX/Delay.h"
 #include "Soundengine/DSPAudio/FX/Reverb.h"
@@ -29,7 +29,7 @@ enum FxTypeEnum
 {
 	FX_OFF,
 	FX_DISTORTION,
-	FX_RING,
+	FX_GLITCH,		/* SHARD: replaces the ring modulator (same type number) */
 	FX_COMPRESSOR,
 	FX_DELAY,
 #if USE_REVERB
@@ -48,7 +48,7 @@ typedef struct FxStruct
 
 
 	MasterDistortion distortion;
-	Ringmod ringmod;
+	Glitch glitch;
 	Compressor compressor;
 	Delay delay;
 
@@ -68,6 +68,8 @@ void FxBus_setParameter(uint8_t idx, float value);
 void FxBus_updateParameter();
 //to prevent NaN pollution from delay
 void FxBus_prepareFxChange();
+/* SHARD: a channel routed to the FX bus was triggered (any context) */
+void FxBus_onTrigger(void);
 
 
 #endif /* INC_SOUNDENGINE_FXBUS_H_ */

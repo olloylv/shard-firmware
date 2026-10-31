@@ -21,6 +21,7 @@
 extern "C" {
 #include "Shard/sh_channel.h"
 #include "Shard/sh_engine.h"
+#include "Shard/sh_bridge.h"
 #include "Parameters.h"
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/mixer.h"
@@ -121,9 +122,11 @@ void DumpJson(const char* path) {
           PAR_CH_BASE, SH_CH_STRIDE, END_OF_SOUND_PARAMETERS, NUM_PARAMS);
   fprintf(f, " \"par\": {\"FX_TYPE\": %d, \"FX_ROUTING\": %d, \"FX_DRY_WET\": %d, \"FX_DIST_TYPE\": %d, "
              "\"FX_P1\": %d, \"FX_RATIO\": %d, \"FX_WAVE\": %d, \"FX_DELAY_TYPE\": %d, \"MORPH_KIT_DEST\": %d, "
-             "\"CV_DEST_1\": %d, \"CV_MOD_AMT_1\": %d, \"CV_SRC_1\": %d},\n",
+             "\"CV_DEST_1\": %d, \"CV_MOD_AMT_1\": %d, \"CV_SRC_1\": %d, "
+             "\"CV2_DEST_1\": %d, \"CV2_AMT_1\": %d, \"CV2_SRC_1\": %d},\n",
           PAR_FX_TYPE, PAR_FX_ROUTING, PAR_FX_DRY_WET, PAR_FX_DIST_TYPE, PAR_FX_P1, PAR_FX_RATIO, PAR_FX_WAVE,
-          PAR_FX_DELAY_TYPE, PAR_MORPH_KIT_DEST, PAR_CV_DEST_1, PAR_CV_MOD_AMT_1, PAR_CV_SRC_1);
+          PAR_FX_DELAY_TYPE, PAR_MORPH_KIT_DEST, PAR_CV_DEST_1, PAR_CV_MOD_AMT_1, PAR_CV_SRC_1,
+          PAR_CV2_DEST_1, PAR_CV2_AMT_1, PAR_CV2_SRC_1);
   fprintf(f, " \"local\": {\"ENGINE\": %d, \"TUNE\": %d, \"FINE\": %d, \"E0\": %d, \"ATTACK\": %d, \"DECAY\": %d, "
              "\"SLOPE\": %d, \"REPEAT\": %d, \"DECAY_ALT\": %d, \"VELVOL\": %d, \"AEG_MODE\": %d, \"FILT_FREQ\": %d, "
              "\"FILT_RESO\": %d, \"FILT_TYPE\": %d, \"FILT_DRIVE\": %d, \"VOL\": %d, \"PAN\": %d, \"SRATE\": %d, "
@@ -162,7 +165,12 @@ void DumpJson(const char* path) {
   fclose(f);
 }
 
-uint8_t kitParams[NUM_PARAMS];
+// sh_bridge.c (CV matrix, morph, FX modulation) works on these
+extern "C" {
+uint8_t activeParameters[NUM_PARAMS];
+uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];
+}
+#define kitParams activeParameters
 
 void ApplyFx(uint16_t p, uint8_t value) {
   const float flt = value / 127.f;
@@ -176,7 +184,7 @@ void ApplyFx(uint16_t p, uint8_t value) {
     case PAR_FX_P3: FxBus_setParameter(2, flt); break;
     case PAR_FX_P4: FxBus_setParameter(3, flt); break;
     case PAR_FX_RATIO: Compressor_setRatio(&fxBus.compressor, value); break;
-    case PAR_FX_WAVE: Ringmod_setWave(&fxBus.ringmod, value); break;
+    case PAR_FX_WAVE: break;
     case PAR_FX_DELAY_TYPE: fxBus.delay.delayType = value; break;
     default: break;
   }
@@ -257,6 +265,7 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
     }
     int16_t a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 }, fx[2 * kBlock] = { 0 };
     sh_beginBlock();
+    sh_cvProcess();
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
       int16_t buf[kBlock];
       sh_channelRender(ch, buf);
@@ -320,6 +329,7 @@ int RenderHits(const char* kitPath, double seconds, const char* outPath) {
     for (int bl = 0; bl < blocks; ++bl) {
       if (bl == 1) sh_trigger(static_cast<uint8_t>(ch), 110, run == 6);
       sh_beginBlock();
+      sh_cvProcess();
       int16_t buf[kBlock];
       float fb[kBlock];
       for (int c = 0; c < SH_NUM_CHANNELS; ++c) {

@@ -18,10 +18,13 @@
 #include "IO/adcPots.h"
 #include "Soundengine/TriggerProcessor.h"
 #include "Soundengine/MIDI/MidiParser.h"
-#include "Soundengine/ModMatrix_Processor.h"
+#endif
 #include "Soundengine/FxBus.h"
-#else
-#define NUM_MOD_SLOTS 18
+
+#ifdef SHARD_HOST
+/* desktop render: CV inputs at 0 V (no modulation), accents from the velocity */
+static inline float adc_getCvValue(uint8_t i) { (void)i; return 0.5f; }
+static inline uint8_t Trigger_getAccent(uint8_t ch) { return (uint8_t)(sh_lastVelocity(ch) * 127.f); }
 #endif
 
 extern uint8_t activeParameters[];
@@ -102,7 +105,7 @@ void sh_kitFixup(uint8_t* para)
 	if(para[PAR_NONE] < 2)
 	{
 		/* format 1 -> 2: new CV destination numbers */
-		for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
+		for(uint8_t i = 0; i < 18; i++)
 		{
 			const uint8_t d = para[PAR_CV_DEST_1 + i];
 			uint8_t nd = 0;
@@ -117,33 +120,39 @@ void sh_kitFixup(uint8_t* para)
 		}
 		para[PAR_NONE] = SH_KIT_VERSION;
 	}
-	for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
-		if(para[PAR_CV_DEST_1 + i] >= SH_NUM_MOD_DESTS)
-			para[PAR_CV_DEST_1 + i] = 0;
+	for(uint8_t i = 0; i < SH_NUM_CV_SLOTS; i++)
+	{
+		if(para[PAR_CVS_DEST(i)] >= SH_NUM_MOD_DESTS) para[PAR_CVS_DEST(i)] = 0;
+		if(para[PAR_CVS_AMT(i)] > 100) para[PAR_CVS_AMT(i)] = 100;
+		if(para[PAR_CVS_SRC(i)] > 16) para[PAR_CVS_SRC(i)] = 0;
+	}
 }
 
 //------------------------------------------------------------------------
 void sh_buildInitKit(uint8_t* para)
 {
-	static const char* const engines[SH_NUM_CHANNELS] = { "tBD", "aSD", "EFM", "tCP", "Crs", "pHH" };
+	/* channel roles: 1 kick, 2 perc/tom, 3 fx, 4 snare, 5 clap, 6 hats (T7 = open) */
+	static const char* const engines[SH_NUM_CHANNELS] = { "tBD", "EFM", "Crs", "aSD", "tCP", "pHH" };
 	memset(para, 0, END_OF_SOUND_PARAMETERS);
 	para[PAR_NONE] = SH_KIT_VERSION;
 	for(uint8_t ch = 0; ch < SH_NUM_CHANNELS; ch++)
 		sh_channelDefaults(&para[PAR_CH(ch, 0)], sh_engineFind(engines[ch]));
-	/* EFM as a metallic perc on channel 3 */
-	para[PAR_CH(2, SHP_TUNE)] = 64;
-	para[PAR_CH(2, SHP_E0 + 0)] = 10;
+	/* EFM as a metallic perc on channel 2 */
+	para[PAR_CH(1, SHP_TUNE)] = 64;
+	para[PAR_CH(1, SHP_E0 + 0)] = 10;
 	/* FX bus off */
 	para[PAR_FX_TYPE] = 0;
 	para[PAR_FX_DRY_WET] = 50;
 	para[PAR_FX_P1] = para[PAR_FX_P2] = para[PAR_FX_P3] = para[PAR_FX_P4] = 64;
-	/* CV matrix: all slots off, CV1..5 as sources */
-	for(uint8_t i = 0; i < 18; i++)
-	{
-		para[PAR_CV_DEST_1 + i] = 0;
-		para[PAR_CV_MOD_AMT_1 + i] = 0;
-		para[PAR_CV_SRC_1 + i] = (uint8_t)(i % 5);
-	}
+	/* CV matrix: all slots off; per channel CV1..5 and the channel LFO as sources */
+	for(uint8_t ch = 0; ch < SH_NUM_CHANNELS; ch++)
+		for(uint8_t k = 0; k < SH_CV_SLOTS_PER_CH; k++)
+		{
+			const uint8_t i = (uint8_t)SH_CV_SLOT(ch, k);
+			para[PAR_CVS_DEST(i)] = 0;
+			para[PAR_CVS_AMT(i)] = 0;
+			para[PAR_CVS_SRC(i)] = (uint8_t)(k < 5 ? k : 5 + ch);
+		}
 }
 
 //------------------------------------------------------------------------
@@ -185,10 +194,8 @@ static void morphAndFxBlock(const float* g)
 		if(d > 0.002f || d < -0.002f)
 		{
 			fxLast[k] = v;
-#ifndef SHARD_HOST
 			if(k == 0) fxBus.dryWet = v;
 			else FxBus_setParameter((uint8_t)(k - 1), v);
-#endif
 		}
 	}
 }
@@ -201,7 +208,8 @@ uint8_t sh_morphKitNr(void)
 uint8_t sh_morphParamValue(uint16_t paramNr)
 {
 	const uint8_t src = activeParameters[paramNr];
-	if(!sh_morphActive() || paramNr >= END_OF_SOUND_PARAMETERS) return src;
+	/* the CV matrix is not morphed */
+	if(!sh_morphActive() || paramNr >= PAR_CV_DEST_1) return src;
 	const uint8_t* kit = mainParameters[morphKitNr];
 	const uint8_t dst = kit[paramNr];
 	uint8_t ch, local;
@@ -223,15 +231,14 @@ uint8_t sh_morphParamValue(uint16_t paramNr)
 void sh_cvProcess(void)
 {
 	float g[SH_MOD_GLOBALS] = { 0 };
-#ifndef SHARD_HOST
-	for(uint8_t i = 0; i < NUM_MOD_SLOTS; i++)
+	for(uint8_t i = 0; i < SH_NUM_CV_SLOTS; i++)
 	{
-		const uint8_t amt = activeParameters[PAR_CV_MOD_AMT_1 + i];
-		const uint8_t dest = activeParameters[PAR_CV_DEST_1 + i];
+		const uint8_t amt = activeParameters[PAR_CVS_AMT(i)];
+		const uint8_t dest = activeParameters[PAR_CVS_DEST(i)];
 		if(amt == 0 || dest == 0 || dest >= SH_NUM_MOD_DESTS) continue;
 		const float amount = amt / 100.f;
 
-		const uint8_t src = activeParameters[PAR_CV_SRC_1 + i];
+		const uint8_t src = activeParameters[PAR_CVS_SRC(i)];
 		float cv;
 		if(src < 5)       cv = adc_getCvValue(src);
 		else if(src < 11) cv = sh_lfoValue((uint8_t)(src - 5));
@@ -259,7 +266,6 @@ void sh_cvProcess(void)
 			sh_modAdd(ch, local, amount * (cv * 2.f - 1.f));
 		}
 	}
-#endif
 	morphAndFxBlock(g);
 }
 

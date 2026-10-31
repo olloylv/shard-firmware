@@ -170,7 +170,7 @@ const char fxNames[][4] =
 	{5},		//number of entries
 	{"off"},
 	{"drv"},
-	{"rng"},
+	{"glt"},
 	{"cmp"},
 	{"del"},
 	//{"rev"}
@@ -523,6 +523,10 @@ const char shortNames[][4]  =
 	{"v/o"},
 	{"cv"},
 	{"mtg"},
+	{"len"},
+	{"chc"},
+	{"var"},
+	{"rep"},
 
 };
 //-----------------------------------------------------------------
@@ -658,6 +662,10 @@ const char longNames[][16] =
 	{"1V/Oct"},
 	{"CV Save"},
 	{"MrphTrgt"},
+	{"SliceLen"},
+	{"Chance"},
+	{"Variety"},
+	{"Repeats"},
 };
 
 

@@ -25,29 +25,30 @@
 #define E_ TEXT_EMPTY
 #define C_(c, l) PAR_CH(c, l)
 
-#define MOD_PAGES(c, s) \
+/* MOD mode: 6 CV matrix slots per channel, two per sub page, then the LFO */
+#define MOD_SLOT_TOP TEXT_CV_SRC, TEXT_CV_AMT, TEXT_CV_DEST, TEXT_SKIP
+#define MOD_SLOT_BOT(c, k) PAR_CVS_SRC(SH_CV_SLOT(c, k)), PAR_CVS_AMT(SH_CV_SLOT(c, k)), PAR_CVS_DEST(SH_CV_SLOT(c, k)), PAR_NONE
+#define EMPTY_PAGE { E_, E_, E_, E_, E_, E_, E_, E_, PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE }
+#define MOD_PAGES(c) \
 	{ \
-		{ \
-			TEXT_CV_SRC, TEXT_CV_AMT, TEXT_CV_DEST, TEXT_SKIP, TEXT_CV_SRC, TEXT_CV_AMT, TEXT_CV_DEST, TEXT_SKIP, \
-			PAR_CV_SRC_1 + (s), PAR_CV_MOD_AMT_1 + (s), PAR_CV_DEST_1 + (s), PAR_NONE, \
-			PAR_CV_SRC_1 + (s) + 1, PAR_CV_MOD_AMT_1 + (s) + 1, PAR_CV_DEST_1 + (s) + 1, PAR_NONE \
-		}, \
-		{ \
-			TEXT_CV_SRC, TEXT_CV_AMT, TEXT_CV_DEST, E_, D_, D_, D_, D_, \
-			PAR_CV_SRC_1 + (s) + 2, PAR_CV_MOD_AMT_1 + (s) + 2, PAR_CV_DEST_1 + (s) + 2, PAR_NONE, \
-			C_(c, SHP_LFO_FREQ), C_(c, SHP_LFO_OFFSET), C_(c, SHP_LFO_WAVE), C_(c, SHP_LFO_RETRIG) \
-		} \
+		{ MOD_SLOT_TOP, MOD_SLOT_TOP, MOD_SLOT_BOT(c, 0), MOD_SLOT_BOT(c, 1) }, \
+		{ MOD_SLOT_TOP, MOD_SLOT_TOP, MOD_SLOT_BOT(c, 2), MOD_SLOT_BOT(c, 3) }, \
+		{ MOD_SLOT_TOP, MOD_SLOT_TOP, MOD_SLOT_BOT(c, 4), MOD_SLOT_BOT(c, 5) }, \
+		{ D_, D_, D_, D_, E_, E_, E_, E_, \
+		  C_(c, SHP_LFO_FREQ), C_(c, SHP_LFO_OFFSET), C_(c, SHP_LFO_WAVE), C_(c, SHP_LFO_RETRIG), \
+		  PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE }, \
+		EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE, EMPTY_PAGE \
 	}
 
-const Page modMatrixPages[7][2] =
+const Page modMatrixPages[7][NUM_SUB_PAGES] =
 {
-	MOD_PAGES(0, 0),
-	MOD_PAGES(1, 3),
-	MOD_PAGES(2, 6),
-	MOD_PAGES(3, 9),
-	MOD_PAGES(4, 12),
-	MOD_PAGES(5, 15),
-	MOD_PAGES(5, 15),	/* button 7 = channel 6 */
+	MOD_PAGES(0),
+	MOD_PAGES(1),
+	MOD_PAGES(2),
+	MOD_PAGES(3),
+	MOD_PAGES(4),
+	MOD_PAGES(5),
+	MOD_PAGES(5),	/* button 7 = channel 6 */
 };
 
 #define ENG_PAGE(c, first) \
@@ -94,8 +95,8 @@ const Page menuPages[NUM_PAGES][NUM_SUB_PAGES] =
 	{
 #if EURORACK_MODULE
 		{
-				TEXT_SCREENSAVER_ON_OFF,    TEXT_CV_SAVE, 	D_, 			D_, 			TEXT_EMPTY, TEXT_EMPTY, TEXT_EMPTY,  TEXT_EMPTY,
-				PAR_SCREENSAVER_ON_OFF,     PAR_CV_SAVE, 	PAR_SH_CPU, 	PAR_SH_UPDATE,	PAR_NONE,  	PAR_NONE, 	PAR_NONE,    PAR_NONE
+				D_,    						TEXT_CV_SAVE, 	D_, 			D_, 			D_, TEXT_EMPTY, TEXT_EMPTY,  TEXT_EMPTY,
+				PAR_SCREENSAVER_ON_OFF,     PAR_CV_SAVE, 	PAR_SH_CPU, 	PAR_SH_UPDATE,	PAR_SH_IDLE,  	PAR_NONE, 	PAR_NONE,    PAR_NONE
 		},
 		{ // GMENU 2nd sub page of global settings
 				TEXT_EMPTY, 	TEXT_EMPTY,		TEXT_EMPTY,		TEXT_EMPTY,		TEXT_EMPTY,		TEXT_EMPTY,			TEXT_EMPTY,	TEXT_EMPTY,
@@ -240,8 +241,8 @@ const Page menuPages[NUM_PAGES][NUM_SUB_PAGES] =
 		},
 			//Ring
 		{
-			TEXT_FX_TYPE,	TEXT_FX_ROUTING,	TEXT_FX_DRY_WET,	TEXT_FX_WAVE,	TEXT_FX_FREQ, 	  	TEXT_EMPTY,		TEXT_EMPTY,	TEXT_EMPTY,
-			PAR_FX_TYPE,	PAR_FX_ROUTING,		PAR_FX_DRY_WET,		PAR_FX_WAVE,	PAR_FX_P1,			PAR_NONE,	PAR_NONE
+			TEXT_FX_TYPE,	TEXT_FX_ROUTING,	TEXT_FX_DRY_WET,	TEXT_FX_GLEN,	TEXT_FX_GCHANCE, 	TEXT_FX_GVAR,	TEXT_FX_GREP,	TEXT_EMPTY,
+			PAR_FX_TYPE,	PAR_FX_ROUTING,		PAR_FX_DRY_WET,		PAR_FX_P1,		PAR_FX_P2,			PAR_FX_P3,		PAR_FX_P4,		PAR_NONE
 		},
 			//Compressor
 		{

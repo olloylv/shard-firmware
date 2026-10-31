@@ -19,6 +19,10 @@ uint8_t screensaver_process();
 
 
 void screensaver_touch();
+/* SHARD: touch with its source for the diagnostics ('b' button, 'p' pot, 'e' encoder) */
+void screensaver_touchFrom(char kind, uint8_t idx);
+extern volatile char screensaver_lastKind;
+extern volatile uint8_t screensaver_lastIdx;
 void screensaver_check();
 
 
