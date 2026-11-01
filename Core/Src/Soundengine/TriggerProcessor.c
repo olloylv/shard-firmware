@@ -293,48 +293,35 @@ void Trigger_resetVoiceTriggered(uint8_t voice) {
 	voiceTriggered[voice] = 0;
 }
 
+/* SHARD: a trigger counts only if the input is still active a moment after
+ * the edge. Slow or ringing gate edges can produce a short falling edge on
+ * the (inverted) input pin when the gate is released; without this check the
+ * voice would play a second time on note off. 80 us is far below the shortest
+ * trigger pulse (1 ms). */
+#define TRIG_CONFIRM_US 80
+static inline uint32_t trig_confirm(uint32_t pending)
+{
+	const uint32_t start = DWT->CYCCNT;
+	const uint32_t wait = TRIG_CONFIRM_US * (SystemCoreClock / 1000000);
+	while((DWT->CYCCNT - start) < wait) {}
+	/* inputs are inverted: 0 = gate high */
+	return pending & ~(GPIOD->IDR);
+}
+
 void EXTI15_10_IRQHandler(void)
 {
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_10) != RESET)
+	const uint32_t pins = GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+	const uint32_t pending = EXTI->PR & pins;
+	if(pending)
 	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_10);
-
-		voiceTriggered[2] = 1;
-	}
-
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_11) != RESET)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_11);
-
-		voiceTriggered[1] = 1;
-	}
-
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_12) != RESET)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_12);
-
-		voiceTriggered[5] = 1;
-	}
-
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_13) != RESET)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
-
-		voiceTriggered[4] = 1;
-	}
-
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_14) != RESET)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_14);
-
-		voiceTriggered[3] = 1;
-	}
-
-	if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_15) != RESET)
-	{
-		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_15);
-
-		voiceTriggered[0] = 1;
+		EXTI->PR = pending;
+		const uint32_t valid = trig_confirm(pending);
+		if(valid & GPIO_PIN_10) voiceTriggered[2] = 1;
+		if(valid & GPIO_PIN_11) voiceTriggered[1] = 1;
+		if(valid & GPIO_PIN_12) voiceTriggered[5] = 1;
+		if(valid & GPIO_PIN_13) voiceTriggered[4] = 1;
+		if(valid & GPIO_PIN_14) voiceTriggered[3] = 1;
+		if(valid & GPIO_PIN_15) voiceTriggered[0] = 1;
 	}
 	/*
 	  // EXTI line interrupt detected
@@ -361,9 +348,12 @@ void EXTI9_5_IRQHandler(void)
 	{
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_9);
 
-		const uint8_t voice = 6;
-		const uint8_t vel = Trigger_getAccent(voice);
-		voiceControl_noteOn(voice , SEQ_DEFAULT_NOTE, vel);
+		if(trig_confirm(GPIO_PIN_9))
+		{
+			const uint8_t voice = 6;
+			const uint8_t vel = Trigger_getAccent(voice);
+			voiceControl_noteOn(voice , SEQ_DEFAULT_NOTE, vel);
+		}
 	}
 #if !EURORACK_MODULE
 	/* EXTI line interrupt detected */
