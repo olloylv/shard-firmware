@@ -24,8 +24,7 @@ be put on any of the six channels.**
 - **Factory bank 0.5**: 128 kits grouped by engine family (MD-style, Plaits, IDM, hybrids), mixed and
   levelled against the kick, every kit in a key.
 
-Documentation: **[manual (English)](docs/MANUAL.md)** · **[руководство (русский)](docs/MANUAL.ru.md)** ·
-[changelog](CHANGELOG.md)
+Documentation: **[manual](docs/MANUAL.md)** · [changelog](CHANGELOG.md)
 
 ## Downloads
 
@@ -35,7 +34,7 @@ Get the files from the [Releases](../../releases) page:
 |---|---|
 | `LXRE_SHARD_V<version>.img` | firmware update file |
 | `shard_bank_v<version>.zip` | factory bank: the `shard` folder for the SD card, `BANK.txt` (list of kits) and audio demos |
-| `SHARD_quickref_v<version>.pdf` | one-page quick reference (Russian) |
+| `SHARD_quickref_v<version>.pdf` | one-page quick reference |
 
 ## Installing
 
@@ -106,7 +105,8 @@ build/host/shard_render out/                                  # a WAV per engine
 python3 tools/kits/make_kits.py build/host/shard_render out/  # factory bank -> out/shard/prj00/
 ```
 
-`make_kits.py` needs `numpy` and `scipy`.
+`make_kits.py` needs `numpy` and `scipy`; `tools/kits/bank_txt.py <out dir>` then writes the kit list
+`BANK.txt`. The quick reference PDF is made by `tools/docs/make_quickref.py` (needs `reportlab`).
 
 ### Programming with a debug probe
 
@@ -144,7 +144,8 @@ prebuilt (`-DLXR_BOOTLOADER_HEX=path/to/LXR_V2_Eurorack_Bootloader.hex`). The bu
 | `Core/ThirdParty/` | subset of Mutable Instruments Plaits and stmlib (MIT) |
 | `Core/Src/`, `Core/Inc/` | original LXR firmware: UI, presets, FX bus, MIDI, I/O |
 | `tools/host/` | desktop build and WAV renderer |
-| `tools/kits/` | factory bank generator and analysis |
+| `tools/kits/` | factory bank generator, analysis and kit list |
+| `tools/docs/` | quick reference PDF generator |
 | `docs/` | manuals |
 
 Originally an STM32CubeIDE project; the CubeMX `.ioc` was removed because regenerating code from it

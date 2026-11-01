@@ -4,7 +4,8 @@
     python3 tools/kits/make_kits.py <shard_render> <out dir>
 
 Writes <out dir>/shard/prj00/NNN-NAME.snd (the module's kit files),
-<out dir>/bank.txt, bank.json and demo WAVs in <out dir>/demo.
+<out dir>/bank.json, fixlog.txt and demo WAVs in <out dir>/demo.
+The kit list BANK.txt is written from bank.json by bank_txt.py.
 
 How the bank is made
 --------------------

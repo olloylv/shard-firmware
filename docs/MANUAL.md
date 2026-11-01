@@ -1,6 +1,6 @@
 # SHARD manual
 
-*For firmware 0.4 and factory bank 0.5. [Русская версия](MANUAL.ru.md).*
+*For firmware 0.4 and factory bank 0.5.*
 
 SHARD is an **unofficial** firmware based on the open-source LXR firmware (GPL-3.0). It is not made,
 approved or supported by Erica Synths.
