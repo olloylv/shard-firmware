@@ -219,31 +219,44 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
     fprintf(stderr, "short kit file\n"); return 1;
   }
   fclose(f);
+  // <patPath> is either 6 lines of step patterns or, if it ends in ".ev", a list of
+  // events "<seconds> <channel 0-5> <velocity> <alt>" (e.g. converted from MIDI)
+  const std::string pp(patPath);
+  const bool events = pp.size() > 3 && pp.compare(pp.size() - 3, 3, ".ev") == 0;
+  struct Ev { double t; int ch; int vel; int alt; };
+  std::vector<Ev> ev;
   std::vector<std::string> pat;
   FILE* pf = fopen(patPath, "r");
   if (!pf) { perror(patPath); return 1; }
   char line[256];
-  while (fgets(line, sizeof(line), pf) && pat.size() < 6) {
+  while (fgets(line, sizeof(line), pf)) {
+    if (events) {
+      Ev e;
+      if (sscanf(line, "%lf %d %d %d", &e.t, &e.ch, &e.vel, &e.alt) == 4 && e.ch >= 0 && e.ch < SH_NUM_CHANNELS)
+        ev.push_back(e);
+      continue;
+    }
+    if (pat.size() >= 6) break;
     std::string l(line);
     while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
     if (!l.empty()) pat.push_back(l);
   }
   fclose(pf);
-  while (pat.size() < 6) pat.push_back("................");
+  while (pat.size() < 6) pat.push_back(events ? "" : "................");
 
   FxBus_init();
   sh_channelsInit(&kitParams[PAR_CH_BASE]);
   for (uint16_t p = PAR_FX_TYPE; p <= PAR_FX_DELAY_TYPE; ++p) ApplyFx(p, kitParams[p]);
 
   const double step = 60.0 / bpm / 4.0;
-  const int steps = bars * 16;
-  const int blocks = static_cast<int>((steps * step + 1.5) * kRate / kBlock);
+  const int steps = events ? 0 : bars * 16;
+  double endT = steps * step;
+  for (const Ev& e : ev) endT = std::max(endT, e.t);
+  const int blocks = static_cast<int>((endT + 1.5) * kRate / kBlock);
   std::vector<int16_t> out;
   double peak[SH_NUM_CHANNELS] = { 0 }, sq[SH_NUM_CHANNELS] = { 0 };
   double mixPeak = 0, outPeak = 0;
   long n = 0, clips = 0;
-  struct Ev { double t; int ch; int vel; int alt; };
-  std::vector<Ev> ev;
   for (int s = 0; s < steps; ++s)
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
       const std::string& l = pat[ch];
@@ -384,7 +397,7 @@ int main(int argc, char** argv) {
   if (dir == "--levels") { AnalyseEngines(); return 0; }
   if (dir == "--dump" && argc > 2) { DumpJson(argv[2]); return 0; }
   if (dir == "--kit" && argc > 7) {
-    // --kit <kit.snd> <pattern.txt> <bpm> <bars> <out.wav|""> <metrics.json|"">
+    // --kit <kit.snd> <pattern.txt|events.ev> <bpm> <bars> <out.wav|""> <metrics.json|"">
     return RenderKit(argv[2], argv[3], atof(argv[4]), atoi(argv[5]), argv[6], argv[7]);
   }
   if (dir == "--hits" && argc > 4) return RenderHits(argv[2], atof(argv[3]), argv[4]);
