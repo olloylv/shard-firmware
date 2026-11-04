@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Write BANK.txt (the kit list shipped with the factory bank) from bank.json.
+"""Write BANK.txt (the kit list shipped with a kit bank) from bank.json.
 
-    python3 tools/kits/bank_txt.py <out dir> [firmware version] [bank version] [title]
+    python3 tools/kits/bank_txt.py <out dir> [firmware version] [bank version] [title] [file name]
 
-<out dir> is the folder make_kits.py wrote to.
+<out dir> is the folder make_kits.py (or make_techno.py, make_electro.py,
+make_psy.py, make_industrial.py) wrote to; the list goes to
+<out dir>/<file name> (BANK.txt by default).
 """
 import json
 import os
@@ -13,6 +15,7 @@ OUT = sys.argv[1]
 FW = sys.argv[2] if len(sys.argv) > 2 else "0.4"
 BANK = sys.argv[3] if len(sys.argv) > 3 else "0.5"
 TITLE = sys.argv[4] if len(sys.argv) > 4 else "factory bank"
+NAME = sys.argv[5] if len(sys.argv) > 5 else "BANK.txt"
 
 THEME = {
     "precision": "precise, dry, glued by the compressor",
@@ -31,6 +34,29 @@ THEME = {
     "peak": "big room glue",
     "acidwash": "crushed atmos, restless",
     "minimal": "sparse, dry",
+    # electro
+    "motorcity": "classic Detroit, glued",
+    "aquatic": "deep, delay",
+    "robotic": "dry, crushed FX",
+    "cyberwar": "hard, driven bus",
+    "breaker": "broken beat, saturation",
+    "laserbeam": "lasers into the ping-pong delay",
+    "bassquake": "808 weight, driven bus",
+    "nightdrive": "smooth, delay and glue",
+    # psy
+    "forest": "organic: bubbles, drops, wood",
+    "swamp": "squelch and quack",
+    "dark": "metal, noise, glitch",
+    "goa": "melodic FX in key, delay",
+    # industrial
+    "ironworks": "hard clipped bus",
+    "noisewall": "noise, drive and glitch",
+    "ritual": "tribal, delay",
+    "assembly": "machine groove, glue",
+    "voltage": "glitch, crushed metal",
+    "furnace": "hard fold/clip",
+    "concrete": "dry, delay and glue",
+    "corrosion": "glitch, ratchets, crush",
 }
 FX = {"del": "delay", "drv": "drive", "glt": "glitch", "cmp": "comp", "off": "-"}
 GROUP = {
@@ -39,11 +65,43 @@ GROUP = {
     "ID": "64-111  ID - IDM/glitch engines (Zap Crs Byt Rng Cmb)",
     "HY": "112-127  HY - hybrids of MD/PL/ID",
     "TK": "0-127  TK - techno: kick, rumble, atmos, rim/snare, clap, hats",
+    "EL": "0-127  EL - electro: 808 kick, percussion, FX, snare, clap, hats",
+    "PS": "0-127  PS - psytrance: kick, rolling bass, psychedelic FX, snare/rim, clap, hats",
+    "IN": "0-127  IN - industrial: overdriven kick, rumble, metal/noise, snare, clap, hats",
 }
+# per bank family: channel roles, and which roles sit on scale degrees
+ROLES = {
+    None: (["Channel roles: 1 kick, 2 percussion/tom, 3 FX, 4 snare, 5 clap,",
+            "6 closed hat; T7 = open hat on channel 6."], "tom", "FX"),
+    "TK": (["Channel roles: 1 kick, 2 rumble, 3 atmosphere, 4 rim/snare, 5 clap,",
+            "6 closed hat; T7 = open hat on channel 6. 'pump': rumble and atmosphere",
+            "duck on every kick (their LFOs are retriggered by channel 1)."], "rumble", "atmosphere"),
+    "EL": (["Channel roles: 1 kick (808 style), 2 percussion (cowbells, toms, blips),",
+            "3 FX (zaps, lasers, beeps), 4 snare, 5 clap, 6 closed hat;",
+            "T7 = open hat on channel 6."], "percussion", "FX"),
+    "PS": (["Channel roles: 1 kick, 2 rolling bass (K-B-B-B: the three 16ths after",
+            "every kick), 3 psychedelic FX, 4 snare/rim, 5 clap, 6 closed hat;",
+            "T7 = open hat on channel 6. 'pump': the bass ducks on every kick (its LFO",
+            "is retriggered by channel 1). 'quack': filter envelope on the FX (a falling",
+            "LFO restarted by every FX hit)."], None, "FX"),
+    "IN": (["Channel roles: 1 overdriven kick, 2 rumble, 3 metal/noise, 4 snare,",
+            "5 clap, 6 closed hat; T7 = open hat on channel 6. 'pump': the rumble ducks",
+            "on every kick (its LFO is retriggered by channel 1)."], "rumble", "metal"),
+}
+NO_DEMO = {"EL", "PS", "IN"}
 
 with open(os.path.join(OUT, "bank.json")) as f:
     kits = json.load(f)
-techno = all(k["family"] == "TK" for k in kits)
+fams = set(k["family"] for k in kits)
+BANK_FAM = fams.pop() if len(fams) == 1 and next(iter(fams)) in ROLES else None
+roles, tuned2, tuned3 = ROLES[BANK_FAM]
+if tuned2:
+    key_text = ["Every kit has its own key (column 'key'): the kick sits on the tonic, the " + tuned2,
+                "and " + tuned3 + " on scale degrees. Levels are balanced against the kick, all kits play"]
+else:
+    key_text = ["Every kit has its own key (column 'key'): the kick and the bass sit on the",
+                "tonic (the bass is measured and fine tuned to it), the " + tuned3 + " on scale degrees.",
+                "Levels are balanced against the kick, all kits play"]
 folders = sorted(d for d in os.listdir(os.path.join(OUT, "shard")) if d.startswith("prj")) \
     if os.path.isdir(os.path.join(OUT, "shard")) else ["prj00"]
 FOLDER = folders[0] if folders else "prj00"
@@ -55,16 +113,9 @@ out = [
     f"card. Existing kits in /shard/{FOLDER} (bank {FOLDER[3:]}) are replaced, so back up",
     "your own first.",
     "",
-    *(["Channel roles: 1 kick, 2 rumble, 3 atmosphere, 4 rim/snare, 5 clap,",
-       "6 closed hat; T7 = open hat on channel 6. 'pump': rumble and atmosphere",
-       "duck on every kick (their LFOs are retriggered by channel 1)."]
-      if techno else
-      ["Channel roles: 1 kick, 2 percussion/tom, 3 FX, 4 snare, 5 clap,",
-       "6 closed hat; T7 = open hat on channel 6."]),
+    *roles,
     "",
-    "Every kit has its own key (column 'key'): the kick sits on the tonic, the "
-    + ("rumble" if techno else "tom"),
-    "and " + ("atmosphere" if techno else "FX") + " on scale degrees. Levels are balanced against the kick, all kits play",
+    *key_text,
     "at the same level. CV matrix: slot 1 = V/Oct (CV1), slot 2 = Decay (CV2), both",
     "at amount 0; slots 3-6 hold the internal movement (S&H on timbre, accents,",
     "LFOs on the FX bus).",
@@ -83,8 +134,8 @@ for k in kits:
 out += [
     "",
     "lfN->fxM: the LFO of channel N moves parameter M of the effect (fwt = dry/wet).",
-    "demo/: the groove of every fourth kit, 2 bars, CV inputs at 0 V.",
+    *([] if BANK_FAM in NO_DEMO else ["demo/: the groove of every fourth kit, 2 bars, CV inputs at 0 V."]),
 ]
-with open(os.path.join(OUT, "BANK.txt"), "w", encoding="ascii") as f:
+with open(os.path.join(OUT, NAME), "w", encoding="ascii") as f:
     f.write("\n".join(out) + "\n")
-print(f"{len(kits)} kits listed in {os.path.join(OUT, 'BANK.txt')}")
+print(f"{len(kits)} kits listed in {os.path.join(OUT, NAME)}")
