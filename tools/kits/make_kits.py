@@ -751,6 +751,7 @@ def role_penalty(role, m, alt=None, vol=100):
 # =============================================================================
 POOL_N = {"kick": 42, "perc": 48, "fx": 54, "snare": 42, "clap": 36, "hats": 36}
 POOL_KEEP = 14
+POOL_PER_ARCH = 4
 
 
 def build_pools(seed="shard5"):
@@ -796,7 +797,7 @@ def build_pools(seed="shard5"):
             # keep the best, at most 4 of one archetype
             keep, per_arch = [], {}
             for c, pen, m in scored:
-                if per_arch.get(c.arch, 0) >= 4:
+                if per_arch.get(c.arch, 0) >= POOL_PER_ARCH:
                     continue
                 keep.append((c, pen, m))
                 per_arch[c.arch] = per_arch.get(c.arch, 0) + 1
@@ -1390,4 +1391,5 @@ def main():
     print(f"{len(report)} kits written to {kit_dir}")
 
 
-main()
+if __name__ == "__main__":
+    main()

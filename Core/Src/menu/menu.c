@@ -955,7 +955,7 @@ static void menu_repaintSimplePage()
 	else if(menu_activePage == KIT_SAVE_PAGE_OK)
 	{
 		memset(&editDisplayBuffer[1][0], ' ', 16);
-		strcpy(&editDisplayBuffer[0][0], "Save Kit");
+		strcpy(&editDisplayBuffer[0][0], menu_saveOptions.category == SAVE_TYPE_BANK ? "Save Bank" : "Save Kit");
 		strcpy(&editDisplayBuffer[1][0], "success!");
 	}
 #if !EURORACK_MODULE

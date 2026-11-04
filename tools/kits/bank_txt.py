@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Write BANK.txt (the kit list shipped with the factory bank) from bank.json.
 
-    python3 tools/kits/bank_txt.py <out dir> [firmware version] [bank version]
+    python3 tools/kits/bank_txt.py <out dir> [firmware version] [bank version] [title]
 
 <out dir> is the folder make_kits.py wrote to.
 """
@@ -12,6 +12,7 @@ import sys
 OUT = sys.argv[1]
 FW = sys.argv[2] if len(sys.argv) > 2 else "0.4"
 BANK = sys.argv[3] if len(sys.argv) > 3 else "0.5"
+TITLE = sys.argv[4] if len(sys.argv) > 4 else "factory bank"
 
 THEME = {
     "precision": "precise, dry, glued by the compressor",
@@ -22,6 +23,14 @@ THEME = {
     "micro": "micro detail, clicks, crush",
     "torque": "hard fold/clip",
     "spatial": "wide stereo, movement",
+    "warehouse": "rumble, bus saturation",
+    "dub": "dub delay on rumble and atmos",
+    "hypnotic": "rolling rumble, glue",
+    "industrial": "driven bus, hard",
+    "deep": "dark, delay",
+    "peak": "big room glue",
+    "acidwash": "crushed atmos, restless",
+    "minimal": "sparse, dry",
 }
 FX = {"del": "delay", "drv": "drive", "glt": "glitch", "cmp": "comp", "off": "-"}
 GROUP = {
@@ -29,19 +38,24 @@ GROUP = {
     "PL": "32-63  PL - Plaits engines (aBD sBD aSD sSD pHH Mdl Str Prt)",
     "ID": "64-111  ID - IDM/glitch engines (Zap Crs Byt Rng Cmb)",
     "HY": "112-127  HY - hybrids of MD/PL/ID",
+    "TK": "0-127  TK - techno: kick, rumble, atmos, rim/snare, clap, hats",
 }
 
 with open(os.path.join(OUT, "bank.json")) as f:
     kits = json.load(f)
 
 out = [
-    f"SHARD factory bank v{BANK}, 128 kits (firmware v{FW})",
+    f"SHARD {TITLE} v{BANK}, {len(kits)} kits (firmware v{FW})",
     "",
     "Installation: copy the shard folder from this archive to the root of the SD",
     "card. Existing kits in /shard/prj00 are replaced, so back up your own first.",
     "",
-    "Channel roles: 1 kick, 2 percussion/tom, 3 FX, 4 snare, 5 clap,",
-    "6 closed hat; T7 = open hat on channel 6.",
+    *(["Channel roles: 1 kick, 2 rumble, 3 atmosphere, 4 rim/snare, 5 clap,",
+       "6 closed hat; T7 = open hat on channel 6. 'pump': rumble and atmosphere",
+       "duck on every kick (their LFOs are retriggered by channel 1)."]
+      if all(k["family"] == "TK" for k in kits) else
+      ["Channel roles: 1 kick, 2 percussion/tom, 3 FX, 4 snare, 5 clap,",
+       "6 closed hat; T7 = open hat on channel 6."]),
     "",
     "Every kit has its own key (column 'key'): the kick sits on the tonic, the tom",
     "and FX on scale degrees. Levels are balanced against the kick, all kits play",
