@@ -117,6 +117,7 @@ add_library(lxr_shard OBJECT
     Src/Shard/sh_morph.c
     Src/Shard/sh_ui.c
     Src/Shard/sh_update.c
+    Src/Shard/sh_bank.c
     Src/Shard/engines/engines.cc
     Src/Shard/engines/lxr_engines.cc
     Src/Shard/engines/plaits_engines.cc

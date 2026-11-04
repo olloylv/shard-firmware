@@ -21,6 +21,8 @@
 #include "Preset/PresetManager.h"
 #include "Shard/sh_morph.h"
 #include "Shard/sh_bridge.h"
+#include "Shard/sh_bank.h"
+#include <string.h>
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <Soundengine/ModMatrix_Processor.h>
@@ -335,6 +337,10 @@ if(sd_card_ok)
 {
 	//SHARD keeps its kits and projects apart from the LXR ones
 	f_mkdir(SH_SD_ROOT);
+	//SHARD: kit banks /shard/prjNN, start in the last used one
+	sh_bankBoot();
+	strcpy(currentFolder, sh_bankFolder());
+	menu_loadedPresetNr[CURRENT_PROJECT] = sh_bankCurrent();
 
 
 
@@ -404,8 +410,8 @@ if(sd_card_ok)
 
 if(sd_card_ok)
 {
-	//return to project 0
-	f_chdir(SH_SD_ROOT "/prj00");
+	//return to the current bank
+	f_chdir(sh_bankFolder());
 
 	uint8_t lastUsedPreset;
 	preset_loadLastUsedPresetNrFromSD(&lastUsedPreset);

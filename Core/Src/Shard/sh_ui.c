@@ -133,7 +133,7 @@ uint8_t shui_handles(uint16_t parNr)
 	return par_isChannelParam(parNr, &ch, &local)
 		|| parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU
 		|| parNr == PAR_SH_MORPH_ALG || parNr == PAR_SH_MORPH_SHP
-		|| parNr == PAR_SCREENSAVER_ON_OFF || parNr == PAR_SH_IDLE;
+		|| parNr == PAR_SCREENSAVER_ON_OFF;
 }
 
 uint8_t shui_isUsed(uint16_t parNr)
@@ -152,7 +152,6 @@ void shui_shortName(uint16_t parNr, char* out3)
 	if(parNr == PAR_SH_CPU) { memcpy(out3, "cpu", 3); return; }
 	if(parNr == PAR_SH_MORPH_ALG) { memcpy(out3, "alg", 3); return; }
 	if(parNr == PAR_SCREENSAVER_ON_OFF) { memcpy(out3, "ssv", 3); return; }
-	if(parNr == PAR_SH_IDLE) { memcpy(out3, "idl", 3); return; }
 	if(parNr == PAR_SH_MORPH_SHP) { memcpy(out3, "shp", 3); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) { memcpy(out3, "   ", 3); return; }
@@ -168,7 +167,6 @@ void shui_editTop(uint16_t parNr, char* row16)
 	if(parNr == PAR_SH_CPU) { memcpy(row16, "Audio CPU load", 14); return; }
 	if(parNr == PAR_SH_MORPH_ALG) { memcpy(row16, "Morph   Algorith", 16); return; }
 	if(parNr == PAR_SCREENSAVER_ON_OFF) { memcpy(row16, "Global  ScrSaver", 16); return; }
-	if(parNr == PAR_SH_IDLE) { memcpy(row16, "Idle s / last in", 16); return; }
 	if(parNr == PAR_SH_MORPH_SHP) { memcpy(row16, "Morph   Sharpnes", 16); return; }
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) return;
@@ -210,16 +208,6 @@ void shui_valueShort(uint16_t parNr, uint8_t value, char* out3)
 	if(parNr == PAR_SH_MORPH_ALG) { putText(out3, morphAlgs[value < SH_NUM_MORPH_ALGS ? value : 0], 3); return; }
 	if(parNr == PAR_SH_MORPH_SHP) { putNum(out3, value); return; }
 	if(parNr == PAR_SCREENSAVER_ON_OFF) { putText(out3, ssvNames[value < SH_NUM_SSV ? value : 1], 3); return; }
-	if(parNr == PAR_SH_IDLE)
-	{
-#ifndef SHARD_HOST
-		const uint32_t sec = screensaver_timer / 1000;
-#else
-		const uint32_t sec = 0;
-#endif
-		putNum(out3, (int)(sec > 999 ? 999 : sec));
-		return;
-	}
 	ParInfo pi;
 	if(!lookup(parNr, &pi)) { memcpy(out3, "   ", 3); return; }
 	if(pi.engine)
@@ -241,17 +229,6 @@ void shui_editBottom(uint16_t parNr, uint8_t value, char* row16)
 {
 	memset(row16, ' ', 16);
 	if(parNr == PAR_SH_UPDATE) { memcpy(row16, "push encoder", 12); return; }
-	if(parNr == PAR_SH_IDLE)
-	{
-		/* "last b13      42": what touched the panel last, seconds since */
-		memcpy(row16, "last", 4);
-#ifndef SHARD_HOST
-		row16[5] = screensaver_lastKind;
-		if(screensaver_lastKind != '-') putNum(&row16[6], screensaver_lastIdx);
-#endif
-		shui_valueShort(parNr, value, &row16[13]);
-		return;
-	}
 	if(parNr == PAR_SH_MORPH_ALG)
 	{
 		static const char longAlgs[SH_NUM_MORPH_ALGS][13] =
@@ -276,7 +253,7 @@ void shui_editBottom(uint16_t parNr, uint8_t value, char* row16)
 //------------------------------------------------------------------------
 uint8_t shui_maxValue(uint16_t parNr)
 {
-	if(parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU || parNr == PAR_SH_IDLE) return 0;
+	if(parNr == PAR_SH_UPDATE || parNr == PAR_SH_CPU) return 0;
 	if(parNr == PAR_SH_MORPH_ALG) return SH_NUM_MORPH_ALGS - 1;
 	if(parNr == PAR_SH_MORPH_SHP) return 127;
 	if(parNr == PAR_SCREENSAVER_ON_OFF) return SH_NUM_SSV - 1;

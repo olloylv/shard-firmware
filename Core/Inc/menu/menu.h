@@ -547,6 +547,7 @@ enum loadSaveEnum
 	//SAVE_TYPE_PATTERN,
 	//SAVE_TYPE_SONG,
 	SAVE_TYPE_MORPH,
+	SAVE_TYPE_BANK,		// SHARD: kit bank /shard/prjNN, see Shard/sh_bank.h
 
 	//SAVE_TYPE_PROJECT,	// kit data, pattern data and BPM
 	//SAVE_TYPE_ALL,			// all global settings, kit data and pattern data

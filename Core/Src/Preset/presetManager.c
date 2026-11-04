@@ -737,7 +737,8 @@ FRESULT preset_saveGlobals()
 	}
 	*/
 	//open the file
-	res = f_open((FIL*)&SDFile,"glo.cfg",FA_CREATE_ALWAYS | FA_WRITE);
+	//SHARD: global settings stay in bank 00 whichever bank is loaded
+	res = f_open((FIL*)&SDFile,SH_SD_ROOT "/prj00/glo.cfg",FA_CREATE_ALWAYS | FA_WRITE);
 	if(res != FR_OK) return res;
 	preset_writeGlobalData();
 
@@ -790,7 +791,7 @@ uint8_t preset_loadGlobals()
 	*/
 
 	//open the file
-	res = f_open((FIL*)&SDFile,"glo.cfg",FA_OPEN_EXISTING | FA_READ);
+	res = f_open((FIL*)&SDFile,SH_SD_ROOT "/prj00/glo.cfg",FA_OPEN_EXISTING | FA_READ);
 	
 	if(res!=FR_OK)
 		return 0; //file open error... maybe the file does not exist?

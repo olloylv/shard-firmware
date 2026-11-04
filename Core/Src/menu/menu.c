@@ -11,6 +11,7 @@
 #include "Shard/sh_ui.h"
 #include "Shard/sh_bridge.h"
 #include "Shard/sh_update.h"
+#include "Shard/sh_bank.h"
 #include "lcd.h"
 #include <string.h>
 #include <stdlib.h>
@@ -377,7 +378,6 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_SH_CPU*/			DTYPE_SH,
 	    /*PAR_SH_MORPH_ALG*/	DTYPE_SH,
 	    /*PAR_SH_MORPH_SHP*/	DTYPE_SH,
-	    /*PAR_SH_IDLE*/			DTYPE_SH,
 	    /*PAR_BPM*/ 			DTYPE_0B255,							//251
 	    /*PAR_MIDI_CHAN_1*/ 	DTYPE_1B16,
 	    /*PAR_MIDI_CHAN_2*/ 	DTYPE_1B16,
@@ -1107,6 +1107,9 @@ static void menu_repaintLoadSavePage()
 #endif
 	case SAVE_TYPE_MORPH:
 		toptxt=PSTR("MorphKit");
+		break;
+	case SAVE_TYPE_BANK:
+		toptxt=PSTR("Bank    ");
 		break;
 #if !EURORACK_MODULE
 	case SAVE_TYPE_SONG:
@@ -2046,6 +2049,13 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							menu_repaint();
 							break;
 
+						case SAVE_TYPE_BANK:
+							if(sh_bankSave(menu_selectedPresetNr[SAVE_TYPE_BANK]) != 0) menu_showSdError(FR_DISK_ERR);
+							menu_activePage = KIT_SAVE_PAGE_OK;
+							sucessTimer = systick_ticks;
+							menu_repaintAll();
+							break;
+
 						case SAVE_TYPE_GLO:
 						{
 							FRESULT res;
@@ -2114,6 +2124,11 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 #endif
 							case SAVE_TYPE_MORPH:
 								type = CURRENT_MORPH;
+								break;
+							case SAVE_TYPE_BANK:
+								sh_bankLoadName(sh_bankCurrent());
+								menu_loadedPresetNr[CURRENT_PROJECT] = sh_bankCurrent();
+								type = CURRENT_PROJECT;
 								break;
 #if !EURORACK_MODULE
 							case SAVE_TYPE_PROJECT:
@@ -2271,6 +2286,13 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					menu_resetSaveParameters();
 					break;
 */
+				case SAVE_TYPE_BANK:
+					/* the same kit slot in the other bank */
+					if(sh_bankLoad(menu_selectedPresetNr[SAVE_TYPE_BANK], menu_loadedPresetNr[CURRENT_KIT]) != 0)
+						menu_showSdError(FR_DISK_ERR);
+					menu_repaintAll();
+					break;
+
 				case SAVE_TYPE_GLO:
 					preset_loadGlobals();
 					menu_resetSaveParameters();						
@@ -2357,7 +2379,8 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					END_DISABLE_CONV_WARNING
 				}
 			} else if(inc>0) {
-				if(menu_selectedPresetNr[menu_saveOptions.category]<NUM_KIT_SLOTS-1) {
+				if(menu_selectedPresetNr[menu_saveOptions.category] <
+						(menu_saveOptions.category == SAVE_TYPE_BANK ? SH_NUM_BANKS - 1 : NUM_KIT_SLOTS - 1)) {
 					DISABLE_CONV_WARNING
 					menu_selectedPresetNr[menu_saveOptions.category] += inc;
 					END_DISABLE_CONV_WARNING
@@ -2381,6 +2404,11 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						break;
 					}
 				}
+			}
+			if(menu_saveOptions.category == SAVE_TYPE_BANK)
+			{
+				if(menu_selectedPresetNr[SAVE_TYPE_BANK] >= SH_NUM_BANKS) menu_selectedPresetNr[SAVE_TYPE_BANK] = SH_NUM_BANKS - 1;
+				sh_bankLoadName(menu_selectedPresetNr[SAVE_TYPE_BANK]);
 			}
 			copyNameToEditBuffer(menu_selectedPresetNr[menu_saveOptions.category],menu_saveOptions.nameBuffer );
 			break; //switch(menu_saveOptions.state) - edit preset nr
@@ -3104,6 +3132,12 @@ void menu_setLoadSaveCategory(uint8_t cat)
 		case SAVE_TYPE_KIT:
 		case SAVE_TYPE_MORPH:
 			menu_saveOptions.nameBuffer = KIT_NAMES;
+			break;
+		case SAVE_TYPE_BANK:
+			menu_saveOptions.nameBuffer = PROJECT_NAMES;
+			menu_selectedPresetNr[SAVE_TYPE_BANK] = sh_bankCurrent();
+			sh_bankLoadName(menu_selectedPresetNr[SAVE_TYPE_BANK]);
+			copyNameToEditBuffer(menu_selectedPresetNr[SAVE_TYPE_BANK], PROJECT_NAMES);
 			break;
 #if !EURORACK_MODULE
 		case SAVE_TYPE_PATTERN:
