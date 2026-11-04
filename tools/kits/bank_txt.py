@@ -43,22 +43,28 @@ GROUP = {
 
 with open(os.path.join(OUT, "bank.json")) as f:
     kits = json.load(f)
+techno = all(k["family"] == "TK" for k in kits)
+folders = sorted(d for d in os.listdir(os.path.join(OUT, "shard")) if d.startswith("prj")) \
+    if os.path.isdir(os.path.join(OUT, "shard")) else ["prj00"]
+FOLDER = folders[0] if folders else "prj00"
 
 out = [
     f"SHARD {TITLE} v{BANK}, {len(kits)} kits (firmware v{FW})",
     "",
     "Installation: copy the shard folder from this archive to the root of the SD",
-    "card. Existing kits in /shard/prj00 are replaced, so back up your own first.",
+    f"card. Existing kits in /shard/{FOLDER} (bank {FOLDER[3:]}) are replaced, so back up",
+    "your own first.",
     "",
     *(["Channel roles: 1 kick, 2 rumble, 3 atmosphere, 4 rim/snare, 5 clap,",
        "6 closed hat; T7 = open hat on channel 6. 'pump': rumble and atmosphere",
        "duck on every kick (their LFOs are retriggered by channel 1)."]
-      if all(k["family"] == "TK" for k in kits) else
+      if techno else
       ["Channel roles: 1 kick, 2 percussion/tom, 3 FX, 4 snare, 5 clap,",
        "6 closed hat; T7 = open hat on channel 6."]),
     "",
-    "Every kit has its own key (column 'key'): the kick sits on the tonic, the tom",
-    "and FX on scale degrees. Levels are balanced against the kick, all kits play",
+    "Every kit has its own key (column 'key'): the kick sits on the tonic, the "
+    + ("rumble" if techno else "tom"),
+    "and " + ("atmosphere" if techno else "FX") + " on scale degrees. Levels are balanced against the kick, all kits play",
     "at the same level. CV matrix: slot 1 = V/Oct (CV1), slot 2 = Decay (CV2), both",
     "at amount 0; slots 3-6 hold the internal movement (S&H on timbre, accents,",
     "LFOs on the FX bus).",

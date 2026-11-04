@@ -1166,7 +1166,7 @@ def retune_check(kit, path):
     m = analyse(RENDER, path, with_features=True)
     undone = 0
     for ch, (old, tgt) in kit.tuned.items():
-        f0 = m[ch]["feat"]["f0"]
+        f0 = m[ch]["feat"]["f0"] if "feat" in m[ch] else 0   # silent after retuning: undo
         if f0 <= 0 or abs(hz_to_midi(f0) - tgt) > 0.6:
             kit.ch[ch].set(tune=old, fine=64)
             undone += 1
