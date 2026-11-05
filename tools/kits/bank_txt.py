@@ -44,10 +44,11 @@ THEME = {
     "bassquake": "808 weight, driven bus",
     "nightdrive": "smooth, delay and glue",
     # psy
-    "forest": "organic: bubbles, drops, wood",
-    "swamp": "squelch and quack",
-    "dark": "metal, noise, glitch",
+    "forest": "organic: bubbles, creaks, wet wood",
+    "swamp": "viscous, low: squelch, gurgle, quack",
+    "dark": "hard, metallic: scrape, clang, noise",
     "goa": "melodic FX in key, delay",
+    "twilight": "dark acid: resonant filter sweeps",
     # industrial
     "ironworks": "hard clipped bus",
     "noisewall": "noise, drive and glitch",
@@ -66,7 +67,7 @@ GROUP = {
     "HY": "112-127  HY - hybrids of MD/PL/ID",
     "TK": "0-127  TK - techno: kick, rumble, atmos, rim/snare, clap, hats",
     "EL": "0-127  EL - electro: 808 kick, percussion, FX, snare, clap, hats",
-    "PS": "0-127  PS - psytrance: kick, rolling bass, psychedelic FX, snare/rim, clap, hats",
+    "PS": "0-127  PS - dark/forest psytrance: kick, rolling bass, psychedelic FX, rim, clap, hats",
     "IN": "0-127  IN - industrial: overdriven kick, rumble, metal/noise, snare, clap, hats",
 }
 # per bank family: channel roles, and which roles sit on scale degrees
@@ -80,15 +81,18 @@ ROLES = {
             "3 FX (zaps, lasers, beeps), 4 snare, 5 clap, 6 closed hat;",
             "T7 = open hat on channel 6."], "percussion", "FX"),
     "PS": (["Channel roles: 1 kick, 2 rolling bass (K-B-B-B: the three 16ths after",
-            "every kick), 3 psychedelic FX, 4 snare/rim, 5 clap, 6 closed hat;",
-            "T7 = open hat on channel 6. 'pump': the bass ducks on every kick (its LFO",
-            "is retriggered by channel 1). 'quack': filter envelope on the FX (a falling",
-            "LFO restarted by every FX hit)."], None, "FX"),
+            "every kick), 3 psychedelic FX, 4 rim (use it rarely), 5 clap (an accent,",
+            "once a bar), 6 closed hat (16ths); T7 = dark open hat, at most once a bar.",
+            "'pump': the bass ducks on every kick (its LFO is retriggered by channel 1).",
+            "'growl': a filter envelope on the bass (an LFO restarted by every bass hit).",
+            "'quack' / 'acid': the same on the FX filter; the other FX get S&H on the",
+            "filter instead."], None, "FX"),
     "IN": (["Channel roles: 1 overdriven kick, 2 rumble, 3 metal/noise, 4 snare,",
             "5 clap, 6 closed hat; T7 = open hat on channel 6. 'pump': the rumble ducks",
             "on every kick (its LFO is retriggered by channel 1)."], "rumble", "metal"),
 }
 NO_DEMO = {"EL", "PS", "IN"}
+BPM_COLUMN = {"EL", "PS", "IN"}     # the genre banks list every kit's tempo
 
 with open(os.path.join(OUT, "bank.json")) as f:
     kits = json.load(f)
@@ -120,7 +124,8 @@ out = [
     "at amount 0; slots 3-6 hold the internal movement (S&H on timbre, accents,",
     "LFOs on the FX bus).",
     "",
-    "slot name     engines (1-6)             FX     key           character",
+    ("slot name     bpm engines (1-6)             FX     key           character" if BANK_FAM in BPM_COLUMN else
+     "slot name     engines (1-6)             FX     key           character"),
 ]
 cur = None
 for k in kits:
@@ -129,7 +134,8 @@ for k in kits:
         out += ["", GROUP[cur], "-" * len(GROUP[cur])]
     mods = (" | " + ", ".join(k["notes"])) if k["notes"] else ""
     engines = " ".join(f"{e:3s}" for e in k["engines"])
-    out.append(f"{k['slot']:3d}  {k['name']:8s} {engines}  {FX[k['fx']]:6s} {k['key']:13s} "
+    bpm = f"{k['bpm']:3d} " if BANK_FAM in BPM_COLUMN else ""
+    out.append(f"{k['slot']:3d}  {k['name']:8s} {bpm}{engines}  {FX[k['fx']]:6s} {k['key']:13s} "
                f"{THEME[k['theme']]}{mods}")
 out += [
     "",

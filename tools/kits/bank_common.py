@@ -260,7 +260,8 @@ ENGINE_SHARE = 0.4  # no engine fills more than this share of a pool
 def filter_pools(pools, max_penalty, keep_min=8, keep_max=64):
     for fam, roles in pools.items():
         for role, items in roles.items():
-            good = [x for x in items if x[1] <= max_penalty]
+            limit = max_penalty[role] if isinstance(max_penalty, dict) else max_penalty
+            good = [x for x in items if x[1] <= limit]
             good = good if len(good) >= keep_min else items[:keep_min]
             # SHARD engines first: keep the LXR voices to a small share
             size = min(len(good), keep_max)
@@ -300,15 +301,18 @@ def probe(archs, role, n=12, seed="probe"):
             m = analyse(mk.RENDER, tmp, with_features=True, alt_all=True)
             for j, c in enumerate(group):
                 alt = m[6 + j] if role == "hats" else None
-                rows.append((mk.role_penalty(role, m[j], alt, c.s("vol")), m[j]))
-        pens = sorted(p for p, _ in rows)
-        med = lambda f: st.median(f(x) for _, x in rows)  # noqa: E731
+                rows.append((mk.role_penalty(role, m[j], alt, c.s("vol")), m[j], alt))
+        pens = sorted(p for p, _, _ in rows)
+        med = lambda f: st.median(f(x) for _, x, _ in rows)  # noqa: E731
+        alts = [a for _, _, a in rows if a is not None and "feat" in a]
+        alt_txt = (f"  open: ring {st.median(a['ring'] for a in alts):.2f} "
+                   f"cen {st.median(a['feat']['centroid'] for a in alts):6.0f}") if alts else ""
         print(f"{a.__name__:18s} pen min {pens[0]:6.2f} med {st.median(pens):6.2f}  "
               f"ring {med(lambda x: x['ring']):.2f} hf {med(lambda x: x['hf']):.2f} "
               f"cen {med(lambda x: x['feat']['centroid']):6.0f} loud {med(lambda x: x['feat']['loud']):6.1f} "
               f"f0 {med(lambda x: x['feat']['f0']):6.1f} ton {med(lambda x: x['feat']['tonal']):5.1f} "
               f"sl {med(lambda x: x['feat']['bands']['sub'] + x['feat']['bands']['low']):.2f} "
-              f"harsh {med(lambda x: x['feat']['harsh']):.2f}", flush=True)
+              f"harsh {med(lambda x: x['feat']['harsh']):.2f}" + alt_txt, flush=True)
 
 
 def maybe_probe(arch_by_role):
@@ -341,10 +345,13 @@ def _merge(a, b):
     return "".join(out)
 
 
-def stress_groove(kit, path, merge=True):
+def stress_groove(kit, path, merge=True, pattern=None):
     pat = os.path.join(mk.WORK, "stress.txt")
     with open(pat, "w") as f:
-        f.write("\n".join(_merge(a, b) if merge else b for a, b in zip(mk.GROOVES[kit.theme], STRESS)) + "\n")
+        if pattern:
+            f.write("\n".join(pattern) + "\n")
+        else:
+            f.write("\n".join(_merge(a, b) if merge else b for a, b in zip(mk.GROOVES[kit.theme], STRESS)) + "\n")
     met = os.path.join(mk.WORK, "stress.json")
     kit.write(path)
     subprocess.run([mk.RENDER, "--kit", path, pat, str(kit.bpm), "2", "", met], check=True)
@@ -361,6 +368,9 @@ def groove_dc(wav):
     w = wave.open(wav)
     x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).reshape(-1, 2) / 32768
     return float(np.max(np.abs(x.mean(axis=0))))
+
+
+EXTRA_STRESS = []   # more stress grooves a bank wants clean (patterns of 6 channels)
 
 
 def clean_master(kit, path):
@@ -382,6 +392,10 @@ def clean_master(kit, path):
     for it in range(16):
         s1 = stress_groove(kit, path, merge=True)
         s2 = stress_groove(kit, path, merge=False)
+        for pat in EXTRA_STRESS:
+            x = stress_groove(kit, path, pattern=pat)
+            if x["clip"] or x["out_peak"] > s2["out_peak"]:
+                s2 = dict(x, clip=x["clip"] + s2["clip"])
         peak = max(m["out_peak"], s1["out_peak"], s2["out_peak"])
         if not (m["clip"] or s1["clip"] or s2["clip"]) and peak <= PEAK_MAX + 0.02:
             break
@@ -397,9 +411,10 @@ def clean_master(kit, path):
     return m
 
 
-def run_bank(seed, family, bank, nfo, build_kit, after_retune=None):
+def run_bank(seed, family, bank, nfo, build_kit, after_retune=None, before_master=None):
     """build 128 kits: build_kit(rng, i) -> Kit (voices from choose_voices);
-    after_retune(kit, path, rng) may replace voices that didn't tune."""
+    after_retune(kit, path, rng) may replace voices that didn't tune;
+    before_master(kit, path) may adjust levels after the groove guard."""
     assert len(nfo) == 8
     kit_dir = os.path.join(mk.OUT, "shard", f"prj{bank:02d}")
     os.makedirs(kit_dir, exist_ok=True)
@@ -427,6 +442,8 @@ def run_bank(seed, family, bank, nfo, build_kit, after_retune=None):
         fixed = mk.fix_kit(kit, path, log)
         mk.balance(kit, path)
         mk.groove_guard(kit, path)
+        if before_master:
+            before_master(kit, path)
         m = clean_master(kit, path)
         kit.write(path)
         kick = analyse(mk.RENDER, path, with_features=True)[0]
