@@ -60,6 +60,7 @@ add_executable(shard_render
   ${DSP}/FX/Reverb.c
   ${DSP}/TiltEq.c
   ${DSP}/FX/Glitch.c
+  ${DSP}/FX/Ringmod.c
   ${DSP}/FX/VerbTools/AllpassDelay.c
   ${DSP}/FX/VerbTools/sinCos.c
   ${DSP}/FX/VerbTools/VerbDelay.c

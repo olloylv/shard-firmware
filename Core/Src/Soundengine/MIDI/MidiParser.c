@@ -190,7 +190,7 @@ void midiParser_setFxParam(uint16_t paramNr, uint8_t value)
 	case PAR_FX_P3:          FxBus_setParameter(2, flt); break;
 	case PAR_FX_P4:          FxBus_setParameter(3, flt); break;
 	case PAR_FX_RATIO:       Compressor_setRatio(&fxBus.compressor, value); break;
-	case PAR_FX_WAVE:        break;   /* SHARD: unused (was the ring modulator wave) */
+	case PAR_FX_WAVE:        Ringmod_setWave(&fxBus.ringmod, value); break;   /* SHARD 0.5: ring FX carrier */
 	case PAR_FX_REVERB_TYPE: break;
 	case PAR_FX_DELAY_TYPE:  fxBus.delay.delayType = value; break;
 	default: break;

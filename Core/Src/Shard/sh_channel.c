@@ -68,6 +68,9 @@ typedef struct
 
 	ShLfo lfo;
 
+	/* ring modulator carrier */
+	uint32_t ringPhase, ringInc;
+
 	float velocity;
 	float pitchMod;
 	float mod[SHP_LOCAL_COUNT];
@@ -83,6 +86,9 @@ static uint8_t* paramBase;
 static const uint8_t* morphTarget;
 static uint8_t meterOn;
 static uint16_t meterPeak[SH_NUM_CHANNELS];
+/* last output block of every channel, carrier of the ring modulators.
+ * Channels rendered later in the block deliver the previous block (1.45 ms). */
+static int16_t lastOut[SH_NUM_CHANNELS][SH_BLOCK_SIZE];
 
 static inline uint8_t* block(uint8_t ch) { return paramBase + ch * SH_CH_STRIDE; }
 
@@ -176,6 +182,9 @@ void sh_channelDefaults(uint8_t* b, uint8_t engine)
 	b[SHP_LFO_OFFSET] = 0;
 	b[SHP_LFO_WAVE]   = 0;
 	b[SHP_LFO_RETRIG] = 0;
+	b[SHP_RING_AMT]   = 0;
+	b[SHP_RING_FREQ]  = 64;
+	b[SHP_RING_SRC]   = SH_RING_SIN;
 	sh_engineApplyDefaults(engine, b, 1);
 }
 
@@ -301,6 +310,63 @@ static void updateStrip(uint8_t ch, ShChannel* c, const uint8_t* p)
 		f = f * f * f * SH_LFO_MAX_F;
 		c->lfo.phaseInc = (uint32_t)(f / SH_LFO_SR * 4294967295.f);
 	}
+
+	v = eff(c, p, SHP_RING_FREQ);
+	if(changed(c, SHP_RING_FREQ, v))
+	{
+		/* 20 Hz .. 5.12 kHz, 8 octaves */
+		const float f = 20.f * exp2f(v * 8.f);
+		c->ringInc = (uint32_t)(f / SH_SAMPLE_RATE * 4294967295.f);
+	}
+}
+
+//------------------------------------------------------------------------
+/* ring modulator: out = x * ((1 - a) + a * carrier) */
+static void ringMod(ShChannel* c, uint8_t ch, const uint8_t* p, float* out)
+{
+	const float a = p[SHP_RING_AMT] * (1.f / 127.f);
+	if(a <= 0.f) return;
+	const float dry = 1.f - a;
+	const uint8_t src = p[SHP_RING_SRC];
+	if(src >= SH_RING_CH1)
+	{
+		const uint8_t sc = (uint8_t)(src - SH_RING_CH1);
+		if(sc >= SH_NUM_CHANNELS) return;
+		const int16_t* m = lastOut[sc];
+		const float g = a * (1.f / 32768.f);
+		for(uint8_t i = 0; i < SH_BLOCK_SIZE; i++)
+			out[i] *= dry + g * m[i];
+		(void)ch;
+		return;
+	}
+	uint32_t ph = c->ringPhase;
+	const uint32_t inc = c->ringInc;
+	for(uint8_t i = 0; i < SH_BLOCK_SIZE; i++)
+	{
+		/* x in -1..1 over one period */
+		const float x = (int32_t)ph * (1.f / 2147483648.f);
+		float m;
+		switch(src)
+		{
+		default:
+		case SH_RING_SIN:
+		{
+			/* parabolic sine with one correction step */
+			const float y = 4.f * x * (1.f - fabsf(x));
+			m = 0.225f * (y * fabsf(y) - y) + y;
+			break;
+		}
+		case SH_RING_TRI:
+			m = 1.f - 2.f * fabsf(x);
+			break;
+		case SH_RING_SQR:
+			m = x < 0.f ? -1.f : 1.f;
+			break;
+		}
+		out[i] *= dry + a * m;
+		ph += inc;
+	}
+	c->ringPhase = ph;
 }
 
 //------------------------------------------------------------------------
@@ -319,6 +385,7 @@ static void handleTrigger(uint8_t ch, ShChannel* c, const uint8_t* p, ShRenderIn
 	}
 	slopeEg2_trigger(&c->aeg);
 	SVF_reset(&c->filter);
+	c->ringPhase = 0;   /* the same carrier phase on every hit */
 
 	/* LFO retrigger: every LFO that listens to this channel */
 	for(uint8_t i = 0; i < SH_NUM_CHANNELS; i++)
@@ -357,6 +424,7 @@ static uint8_t isSteppedLocal(uint8_t local, const ShEngineInfo* info)
 	{
 	case SHP_ENGINE: case SHP_AEG_MODE: case SHP_FILT_TYPE: case SHP_OUT:
 	case SHP_LFO_WAVE: case SHP_LFO_RETRIG: case SHP_VELVOL: case SHP_REPEAT:
+	case SHP_RING_SRC:
 		return 1;
 	default:
 		break;
@@ -459,6 +527,7 @@ void sh_channelRender(uint8_t ch, int16_t* buf)
 	/* engine */
 	float out[SH_BLOCK_SIZE];
 	sh_engineRender(ch, &in, out);
+	ringMod(c, ch, p, out);
 	for(uint8_t i = 0; i < SH_BLOCK_SIZE; i++)
 	{
 		float x = out[i] * 32767.f;
@@ -530,6 +599,9 @@ void sh_channelRender(uint8_t ch, int16_t* buf)
 		for(uint8_t i = 0; i < SH_BLOCK_SIZE; i++)
 			buf[i] = (int16_t)((buf[i] >> s) << s);
 	}
+
+	/* carrier for the ring modulators */
+	memcpy(lastOut[ch], buf, sizeof(lastOut[ch]));
 
 	/* level meter for the screensaver */
 	if(meterOn)

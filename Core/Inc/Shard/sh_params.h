@@ -40,7 +40,7 @@ extern "C" {
  *   AEG: ATTACK DECAY SLOPE REPEAT DECAY_ALT VELVOL AEG_MODE
  *   FLT: FREQ RESO TYPE DRIVE
  *   MIX: VOL PAN SRATE DRIVE OUT BITS
- *   LFO: FREQ OFFSET WAVE RETRIG
+ *   LFO: FREQ OFFSET WAVE RETRIG RING_AMT RING_FREQ RING_SRC
  */
 enum ShLocalParam
 {
@@ -75,6 +75,12 @@ enum ShLocalParam
 	SHP_LFO_WAVE,      /* list: SIN TRI SUP SDN SQR RND EUP EDN */
 	SHP_LFO_RETRIG,    /* list: OFF, CH1..CH6 */
 
+	/* SHARD 0.5: ring modulator after the engine. Kits of older versions
+	 * have 0 in these slots = ring off. */
+	SHP_RING_AMT,      /* 0 = off .. 127 = full ring modulation */
+	SHP_RING_FREQ,     /* internal carrier, 20 Hz .. 5 kHz exponential */
+	SHP_RING_SRC,      /* list: SIN TRI SQR, CH1..CH6 (output of a channel) */
+
 	SHP_LOCAL_COUNT
 };
 
@@ -85,6 +91,9 @@ static_assert(SHP_LOCAL_COUNT <= SH_CH_STRIDE, "channel block too large");
 #else
 _Static_assert(SHP_LOCAL_COUNT <= SH_CH_STRIDE, "channel block too large");
 #endif
+
+/* ring modulator carriers */
+enum { SH_RING_SIN = 0, SH_RING_TRI, SH_RING_SQR, SH_RING_CH1, SH_NUM_RING_SRC = SH_RING_CH1 + 6 };
 
 /* AEG modes */
 enum { SH_AEG_AD = 0, SH_AEG_OFF, SH_NUM_AEG_MODES };

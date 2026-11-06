@@ -59,7 +59,7 @@ THEME = {
     "concrete": "dry, delay and glue",
     "corrosion": "glitch, ratchets, crush",
 }
-FX = {"del": "delay", "drv": "drive", "glt": "glitch", "cmp": "comp", "off": "-"}
+FX = {"del": "delay", "drv": "drive", "glt": "glitch", "cmp": "comp", "rng": "ring", "off": "-"}
 GROUP = {
     "MD": "0-31  MD - Machinedrum-inspired engines (tBD tSD tCP tHH EFM GND)",
     "PL": "32-63  PL - Plaits engines (aBD sBD aSD sSD pHH Mdl Str Prt)",

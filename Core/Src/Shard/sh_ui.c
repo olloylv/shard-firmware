@@ -35,6 +35,7 @@ static const char filterNames[][4] = { "off", "LP ", "HP ", "BP ", "UBP", "Nch",
 static const char outNames[][4]    = { "St1", "St2", "L1 ", "R1 ", "L2 ", "R2 ", "FX " };
 static const char lfoWaves[][4]    = { "sin", "tri", "sup", "sdn", "sqr", "rnd", "xup", "xdn" };
 static const char retrigNames[][4] = { "off", "c1 ", "c2 ", "c3 ", "c4 ", "c5 ", "c6 " };
+static const char ringSrcs[][4]   = { "sin", "tri", "sqr", "c1 ", "c2 ", "c3 ", "c4 ", "c5 ", "c6 " };
 static const char morphAlgs[SH_NUM_MORPH_ALGS][4] = { "lin", "snp", "sct", "stp" };
 /* screensaver timeout; 1 = "on" of the LXR firmware */
 #define SH_NUM_SSV 5
@@ -68,6 +69,9 @@ static const StripParam stripParams[SHP_LOCAL_COUNT] =
 	[SHP_LFO_OFFSET] = { "Ofs", "LFO Phas", "LFO", SH_PT_UNI, 127, 0 },
 	[SHP_LFO_WAVE]   = { "Wav", "LFO Wave", "LFO", SH_PT_LIST, 7, lfoWaves },
 	[SHP_LFO_RETRIG] = { "Rtg", "Retrig",   "LFO", SH_PT_LIST, 6, retrigNames },
+	[SHP_RING_AMT]   = { "Rng", "RingAmt",  "RNG", SH_PT_UNI, 127, 0 },
+	[SHP_RING_FREQ]  = { "RFq", "RingFreq", "RNG", SH_PT_UNI, 127, 0 },
+	[SHP_RING_SRC]   = { "RSr", "RingSrc",  "RNG", SH_PT_LIST, SH_NUM_RING_SRC - 1, ringSrcs },
 };
 
 //------------------------------------------------------------------------

@@ -131,10 +131,11 @@ void DumpJson(const char* path) {
              "\"SLOPE\": %d, \"REPEAT\": %d, \"DECAY_ALT\": %d, \"VELVOL\": %d, \"AEG_MODE\": %d, \"FILT_FREQ\": %d, "
              "\"FILT_RESO\": %d, \"FILT_TYPE\": %d, \"FILT_DRIVE\": %d, \"VOL\": %d, \"PAN\": %d, \"SRATE\": %d, "
              "\"DRIVE\": %d, \"OUT\": %d, \"BITS\": %d, \"LFO_FREQ\": %d, \"LFO_OFFSET\": %d, \"LFO_WAVE\": %d, "
-             "\"LFO_RETRIG\": %d},\n",
+             "\"LFO_RETRIG\": %d, \"RING_AMT\": %d, \"RING_FREQ\": %d, \"RING_SRC\": %d},\n",
           SHP_ENGINE, SHP_TUNE, SHP_FINE, SHP_E0, SHP_ATTACK, SHP_DECAY, SHP_SLOPE, SHP_REPEAT, SHP_DECAY_ALT,
           SHP_VELVOL, SHP_AEG_MODE, SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_TYPE, SHP_FILT_DRIVE, SHP_VOL, SHP_PAN,
-          SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG);
+          SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG,
+          SHP_RING_AMT, SHP_RING_FREQ, SHP_RING_SRC);
   fprintf(f, " \"mod_ch_base\": %d, \"mod_globals\": %d,\n", SH_MOD_CH_BASE, SH_MOD_GLOBALS);
   fprintf(f, " \"mod_targets_per_ch\": %d, \"mod_target_local\": [", SH_MOD_TARGETS_PER_CH);
   for (int i = 0; i < SH_MOD_TARGETS_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modTargetLocal[i]);
@@ -184,7 +185,7 @@ void ApplyFx(uint16_t p, uint8_t value) {
     case PAR_FX_P3: FxBus_setParameter(2, flt); break;
     case PAR_FX_P4: FxBus_setParameter(3, flt); break;
     case PAR_FX_RATIO: Compressor_setRatio(&fxBus.compressor, value); break;
-    case PAR_FX_WAVE: break;
+    case PAR_FX_WAVE: Ringmod_setWave(&fxBus.ringmod, value); break;
     case PAR_FX_DELAY_TYPE: fxBus.delay.delayType = value; break;
     default: break;
   }

@@ -73,7 +73,7 @@ RATE = 44140
 FILTER = {"off": 0, "lp": 1, "hp": 2, "bp": 3, "ubp": 4, "notch": 5, "peak": 6, "lp2": 7}
 OUTS = {"st1": 0, "st2": 1, "l1": 2, "r1": 3, "l2": 4, "r2": 5, "fx": 6}
 LFO = {"sin": 0, "tri": 1, "sup": 2, "sdn": 3, "sqr": 4, "rnd": 5, "xup": 6, "xdn": 7}
-FX = {"off": 0, "drv": 1, "glt": 2, "cmp": 3, "del": 4}
+FX = {"off": 0, "drv": 1, "glt": 2, "cmp": 3, "del": 4, "rng": 5}
 
 FAMILY = {
     "MD": {"tBD", "tSD", "tCP", "tHH", "EFM", "GND"},

@@ -21,6 +21,7 @@
 #include "Soundengine/DSPAudio/FX/Glitch.h"
 #include "Soundengine/DSPAudio/FX/Compressor.h"
 #include "Soundengine/DSPAudio/FX/Delay.h"
+#include "Soundengine/DSPAudio/FX/Ringmod.h"
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 
 #define USE_REVERB 0
@@ -32,6 +33,7 @@ enum FxTypeEnum
 	FX_GLITCH,		/* SHARD: replaces the ring modulator (same type number) */
 	FX_COMPRESSOR,
 	FX_DELAY,
+	FX_RING,		/* SHARD 0.5: the ring modulator is back, appended */
 #if USE_REVERB
 	FX_REVERB
 #endif
@@ -51,6 +53,7 @@ typedef struct FxStruct
 	Glitch glitch;
 	Compressor compressor;
 	Delay delay;
+	Ringmod ringmod;
 
 
 

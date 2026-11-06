@@ -56,7 +56,7 @@ const Page modMatrixPages[7][NUM_SUB_PAGES] =
 	  C_(c, SHP_E0 + (first)),     C_(c, SHP_E0 + (first) + 1), C_(c, SHP_E0 + (first) + 2), C_(c, SHP_E0 + (first) + 3), \
 	  C_(c, SHP_E0 + (first) + 4), C_(c, SHP_E0 + (first) + 5), C_(c, SHP_E0 + (first) + 6), C_(c, SHP_E0 + (first) + 7) }
 
-/* the 8 sub pages of a channel: OSC AEG MOD FM SMP FLT MIX LFO */
+/* the 8 sub pages of a channel: OSC AEG MOD FM SMP FLT(+ring) MIX LFO */
 #define CH_PAGES(c) \
 	{ \
 		{ D_, D_, D_, D_, D_, D_, D_, D_, \
@@ -68,9 +68,9 @@ const Page modMatrixPages[7][NUM_SUB_PAGES] =
 		ENG_PAGE(c, 5), \
 		ENG_PAGE(c, 13), \
 		ENG_PAGE(c, 21), \
-		{ D_, D_, D_, D_, E_, E_, E_, E_, \
+		{ D_, D_, D_, D_, D_, D_, D_, E_, \
 		  C_(c, SHP_FILT_FREQ), C_(c, SHP_FILT_RESO), C_(c, SHP_FILT_TYPE), C_(c, SHP_FILT_DRIVE), \
-		  PAR_NONE, PAR_NONE, PAR_NONE, PAR_NONE }, \
+		  C_(c, SHP_RING_AMT), C_(c, SHP_RING_FREQ), C_(c, SHP_RING_SRC), PAR_NONE }, \
 		{ D_, D_, D_, D_, D_, D_, E_, E_, \
 		  C_(c, SHP_VOL), C_(c, SHP_PAN), C_(c, SHP_SRATE), C_(c, SHP_DRIVE), \
 		  C_(c, SHP_OUT), C_(c, SHP_BITS), PAR_NONE, PAR_NONE }, \
@@ -254,10 +254,10 @@ const Page menuPages[NUM_PAGES][NUM_SUB_PAGES] =
 			TEXT_FX_TYPE,	TEXT_FX_ROUTING,	TEXT_FX_DRY_WET,	TEXT_FX_TYPE, 	 	TEXT_FX_TIME,  			TEXT_FX_RANGE,		TEXT_FX_TONE,	TEXT_FX_FEEDBACK,
 			PAR_FX_TYPE,	PAR_FX_ROUTING,		PAR_FX_DRY_WET,		PAR_FX_DELAY_TYPE,	PAR_FX_P1,				PAR_FX_P2,			PAR_FX_P3,		PAR_FX_P4
 		},
-			//Reverb - predelay, decay, tone, reflection
+			//SHARD 0.5: ring modulator - wave, freq, AM bias, spread, random (sub page = FX_RING)
 		{
-			TEXT_FX_TYPE,	TEXT_FX_ROUTING,	TEXT_FX_DRY_WET,	TEXT_FX_TYPE, 		TEXT_FX_PREDELAY,  	TEXT_FX_COMP_DECAY,	TEXT_FX_TONE,	TEXT_FX_REFLECTION,
-			PAR_FX_TYPE,	PAR_FX_ROUTING,		PAR_FX_DRY_WET,		PAR_FX_REVERB_TYPE,	PAR_FX_P1,			PAR_FX_P2,			PAR_FX_P3,		PAR_FX_P4
+			TEXT_FX_TYPE,	TEXT_FX_ROUTING,	TEXT_FX_DRY_WET,	TEXT_FX_WAVE, 		TEXT_FX_RFREQ,  	TEXT_FX_RAM,		TEXT_FX_RSPREAD,	TEXT_FX_RRND,
+			PAR_FX_TYPE,	PAR_FX_ROUTING,		PAR_FX_DRY_WET,		PAR_FX_WAVE,		PAR_FX_P1,			PAR_FX_P2,			PAR_FX_P3,			PAR_FX_P4
 		},
 		{
 			TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,TEXT_EMPTY,
