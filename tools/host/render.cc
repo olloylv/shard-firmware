@@ -190,22 +190,33 @@ void ApplyFx(uint16_t p, uint8_t value) {
   }
 }
 
-// adds a mono block to an interleaved stereo buffer according to a routing value
-void Route(uint8_t dest, float pl, float pr, const int16_t* d, int16_t* a, int16_t* b, int16_t* fx) {
-  auto add = [](int16_t& o, float v) {
-    float x = o + v; o = static_cast<int16_t>(x > 32767 ? 32767 : (x < -32768 ? -32768 : x));
+// adds a mono block to the float output buses (interleaved stereo) or to the 16 bit
+// FX send, according to a routing value; as mixer_addFloat() in the firmware (0.5)
+void Route(uint8_t dest, float pl, float pr, const int16_t* d, float* a, float* b, int16_t* fx) {
+  auto sat = [](int16_t& o, float v) {
+    float x = o + static_cast<float>(static_cast<int16_t>(v));
+    o = static_cast<int16_t>(x > 32767 ? 32767 : (x < -32768 ? -32768 : x));
   };
   for (int i = 0; i < kBlock; ++i) {
     switch (dest) {
-      case MIXER_ROUTING_DAC1_STEREO: add(b[2 * i], d[i] * pl); add(b[2 * i + 1], d[i] * pr); break;
-      case MIXER_ROUTING_DAC2_STEREO: add(a[2 * i], d[i] * pl); add(a[2 * i + 1], d[i] * pr); break;
-      case MIXER_ROUTING_DAC1_L: add(b[2 * i], d[i]); break;
-      case MIXER_ROUTING_DAC1_R: add(b[2 * i + 1], d[i]); break;
-      case MIXER_ROUTING_DAC2_L: add(a[2 * i], d[i]); break;
-      case MIXER_ROUTING_DAC2_R: add(a[2 * i + 1], d[i]); break;
-      default: add(fx[2 * i], d[i] * pl); add(fx[2 * i + 1], d[i] * pr); break;
+      case MIXER_ROUTING_DAC1_STEREO: b[2 * i] += d[i] * pl; b[2 * i + 1] += d[i] * pr; break;
+      case MIXER_ROUTING_DAC2_STEREO: a[2 * i] += d[i] * pl; a[2 * i + 1] += d[i] * pr; break;
+      case MIXER_ROUTING_DAC1_L: b[2 * i] += d[i]; break;
+      case MIXER_ROUTING_DAC1_R: b[2 * i + 1] += d[i]; break;
+      case MIXER_ROUTING_DAC2_L: a[2 * i] += d[i]; break;
+      case MIXER_ROUTING_DAC2_R: a[2 * i + 1] += d[i]; break;
+      default: sat(fx[2 * i], d[i] * pl); sat(fx[2 * i + 1], d[i] * pr); break;
     }
   }
+}
+
+// the output soft limiter of the firmware (mixer.c, SH_LIMIT_KNEE): input and output
+// normalised to full scale = 1
+float SoftLimit(float x) {
+  const float knee = 0.89f, a = std::fabs(x);
+  if (a <= knee) return x;
+  const float y = knee + (1.f - knee) * std::tanh((a - knee) / (1.f - knee));
+  return x < 0 ? -y : y;
 }
 
 // pattern: 6 lines of 16 steps; '.' rest, 'x' hit, 'X' accent, 'o' alt trigger (channel 6),
@@ -276,7 +287,8 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
       sh_trigger(ev[next].ch, ev[next].vel, ev[next].alt);
       ++next;
     }
-    int16_t a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 }, fx[2 * kBlock] = { 0 };
+    float a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 };
+    int16_t fx[2 * kBlock] = { 0 }, ra[2 * kBlock] = { 0 }, rb[2 * kBlock] = { 0 };
     sh_beginBlock();
     sh_cvProcess();
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
@@ -291,12 +303,15 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
       sh_channelPan(ch, &pl, &pr);
       Route(sh_channelRouting(ch), pl, pr, buf, a, b, fx);
     }
-    FxBus_process(fx, &a[0], &a[1], &b[0], &b[1], kBlock);
+    FxBus_process(fx, &ra[0], &ra[1], &rb[0], &rb[1], kBlock);
     for (int i = 0; i < 2 * kBlock; ++i) {
-      const int pa = std::abs(static_cast<int>(a[i])), pb = std::abs(static_cast<int>(b[i]));
+      // bus level before the limiter; 'clip' counts the samples that would have
+      // clipped on the 16 bit bus (now rounded off by the limiter)
+      const float va = a[i] + ra[i], vb = b[i] + rb[i];
+      const float pa = std::fabs(va), pb = std::fabs(vb);
       outPeak = std::max(outPeak, std::max(pa, pb) / 32768.0);
       clips += (pa >= 32767) + (pb >= 32767);
-      float x = (a[i] + b[i]) * 0.8f;
+      float x = (SoftLimit(va / 32768.f) + SoftLimit(vb / 32768.f)) * 0.8f * 32768.f;
       x = x > 32767 ? 32767 : (x < -32768 ? -32768 : x);
       mixPeak = std::max(mixPeak, std::fabs(x) / 32768.0);
       out.push_back(static_cast<int16_t>(x));

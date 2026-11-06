@@ -26,7 +26,7 @@ uint8_t soundengine_calcNextSampleBlock()
 	if(bCurrentSampleValid!= SAMPLE_VALID)
 	{
 	#if USE_DAC2
-		mixer_calcNextSampleBlock((int16_t*)&dma_buffer[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)],(int16_t*)&dma_buffer2[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)]);
+		mixer_calcNextSampleBlock(&dma_buffer[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)],&dma_buffer2[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)]);
 	#else
 		mixer_calcNextSampleBlock(&dma_buffer[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)],&dma_buffer2[(1-bCurrentSampleValid)*(OUTPUT_DMA_SIZE*2)]);
 	#endif

@@ -652,13 +652,13 @@ static void init_adc1(void)
 	}
 }
 
-// I2S2 and I2S3 feed the audio codecs: master transmit, Philips standard, 16 bit, 44.1 kHz, with MCLK.
+// I2S2 and I2S3 feed the audio codecs: master transmit, Philips standard, 24 bit (SHARD 0.5, was 16), 44.1 kHz, with MCLK.
 static void init_i2s(I2S_HandleTypeDef *hi2s, SPI_TypeDef *instance)
 {
 	hi2s->Instance = instance;
 	hi2s->Init.Mode = I2S_MODE_MASTER_TX;
 	hi2s->Init.Standard = I2S_STANDARD_PHILIPS;
-	hi2s->Init.DataFormat = I2S_DATAFORMAT_16B;
+	hi2s->Init.DataFormat = I2S_DATAFORMAT_24B;
 	hi2s->Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
 	hi2s->Init.AudioFreq = I2S_AUDIOFREQ_44K;
 	hi2s->Init.CPOL = I2S_CPOL_HIGH;

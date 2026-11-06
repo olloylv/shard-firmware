@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include <math.h>
+#include <string.h>
 #include <Soundengine/ModMatrix_Processor.h>
 #include <Soundengine/TriggerProcessor.h>
 #include "Soundengine/DSPAudio/mixer.h"
@@ -534,17 +536,81 @@ IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float p
 }
 //#pragma GCC pop_options
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
+/* SHARD 0.5: float output buses and 24 bit DACs.
+ *
+ * The channels still render 16 bit blocks (their strip, bit crusher included,
+ * works on 16 bit values), but they are summed in float instead of 16 bit
+ * saturating adds, the FX return is added in float too, and every output
+ * goes through a soft limiter before it is written to the DMA buffer as 24 bit
+ * I2S data. The bus scale stays 1.0 = one 16 bit LSB, so levels are unchanged:
+ * a kit that peaked at 0.9 before plays exactly the same, only the overs that
+ * used to clip hard are rounded off now.
+ *
+ * DMA layout (I2S 24 bit in 32 bit frames, DMA in half words): one sample is
+ * two half words, high part first: [s23..s8] then [s7..s0, 8 zero bits]. */
+#define SH_LIMIT_KNEE 0.89f				/* about -1 dBFS: below it the limiter does nothing */
+
+IN_ITCM_RAM static inline float mixer_softLimit(float x)
 {
-	voiceControl_processQueue();
-#if !EURORACK_MODULE
-	r2_Available = (switch_r2_GPIO_Port->IDR & switch_r2_Pin)>0;
-	l1_Available = (switch_l1_GPIO_Port->IDR & switch_l1_Pin)>0;
-	l2_Available = (switch_l2_GPIO_Port->IDR & switch_l2_Pin)>0;
-	r1_Available = (switch_r1_GPIO_Port->IDR & switch_r1_Pin)>0;
-#endif
+	/* normalised: 1.0 = full scale. Linear up to the knee, then a tanh shoulder
+	 * that reaches full scale only asymptotically (continuous slope at the knee). */
+	const float a = fabsf(x);
+	if(a <= SH_LIMIT_KNEE) return x;
+	const float r = 1.f - SH_LIMIT_KNEE;
+	const float y = SH_LIMIT_KNEE + r * tanhf((a - SH_LIMIT_KNEE) / r);
+	return x < 0.f ? -y : y;
+}
 
+IN_ITCM_RAM static inline uint32_t mixer_to24(float bus)
+{
+	int32_t s = (int32_t)(mixer_softLimit(bus * (1.f / 32768.f)) * 8388607.f);
+	/* first half word sent = bits 23..8, second = bits 7..0 in its upper byte */
+	return ((uint32_t)(s & 0xFF) << 24) | ((uint32_t)(s >> 8) & 0xFFFF);
+}
 
+/* add one channel block to the float buses (bus1 = DAC2 pair, bus2 = DAC1 pair,
+ * interleaved L R as the DMA buffers) or to the 16 bit FX send */
+IN_ITCM_RAM static inline void mixer_addFloat(uint8_t dest, const float panL, const float panR, const int16_t* data,
+		float* bus1, float* bus2, int16_t* fxBuffer)
+{
+	dest = mixer_checkOutJackAvailable(dest);
+	uint8_t i;
+	switch(dest)
+	{
+	case MIXER_ROUTING_FX_BUS:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++)
+		{
+			const int32_t y = *((int32_t*)fxBuffer);
+			const int32_t x = __PKHBT((int16_t)(data[i] * panL), (int16_t)(data[i] * panR), 16);
+			*((int32_t*)fxBuffer) = __QADD16(x, y);
+			fxBuffer += 2;
+		}
+		break;
+	case MIXER_ROUTING_DAC1_STEREO:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) { bus2[2*i] += data[i] * panL; bus2[2*i+1] += data[i] * panR; }
+		break;
+	case MIXER_ROUTING_DAC2_STEREO:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) { bus1[2*i] += data[i] * panL; bus1[2*i+1] += data[i] * panR; }
+		break;
+	case MIXER_ROUTING_DAC1_L:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) bus2[2*i] += data[i];
+		break;
+	case MIXER_ROUTING_DAC1_R:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) bus2[2*i+1] += data[i];
+		break;
+	case MIXER_ROUTING_DAC2_L:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) bus1[2*i] += data[i];
+		break;
+	case MIXER_ROUTING_DAC2_R:
+		for(i = 0; i < OUTPUT_DMA_SIZE; i++) bus1[2*i+1] += data[i];
+		break;
+	default:
+		break;
+	}
+}
+
+IN_ITCM_RAM void mixer_calcNextSampleBlock(uint32_t* output, uint32_t* output2)
+{
 	sh_cpuBlockStart();
 
 	//SHARD: LFOs and CV matrix, then the six channels
@@ -553,30 +619,33 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 
 	int16_t sampleData[OUTPUT_DMA_SIZE];
 	int16_t fxBusData[OUTPUT_DMA_SIZE*2];
-	const uint8_t pos = 0;
+	int16_t fxRet1[OUTPUT_DMA_SIZE*2];
+	int16_t fxRet2[OUTPUT_DMA_SIZE*2];
+	float bus1[OUTPUT_DMA_SIZE*2];
+	float bus2[OUTPUT_DMA_SIZE*2];
 
-	//Clear is necessary, otherwise we keep trash data on non routed outputs
-	bufferTool_clearBuffer(output,OUTPUT_DMA_SIZE*2);
-	bufferTool_clearBuffer(output2,OUTPUT_DMA_SIZE*2);
+	memset(bus1, 0, sizeof(bus1));
+	memset(bus2, 0, sizeof(bus2));
 	bufferTool_clearBuffer(fxBusData,OUTPUT_DMA_SIZE*2);
+	bufferTool_clearBuffer(fxRet1,OUTPUT_DMA_SIZE*2);
+	bufferTool_clearBuffer(fxRet2,OUTPUT_DMA_SIZE*2);
 
 	for(uint8_t ch = 0; ch < SH_NUM_CHANNELS; ch++)
 	{
 		float panL, panR;
 		sh_channelRender(ch, sampleData);
 		sh_channelPan(ch, &panL, &panR);
-		mixer_addDataToOutput(sh_channelRouting(ch), panL, panR, sampleData,
-				&output[pos],&output[pos+1],&output2[pos],&output2[pos+1], fxBusData);
+		mixer_addFloat(sh_channelRouting(ch), panL, panR, sampleData, bus1, bus2, fxBusData);
 	}
 
-	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
-	sh_cpuBlockEnd();
-/*
-	if(activeParameters[UNUSED_PAR_GLO_SAT])
+	/* the FX bus still works in 16 bit: it writes its return into empty buffers,
+	 * which are then added to the float buses */
+	FxBus_process(fxBusData, &fxRet1[0], &fxRet1[1], &fxRet2[0], &fxRet2[1], OUTPUT_DMA_SIZE);
+
+	for(uint8_t i = 0; i < OUTPUT_DMA_SIZE*2; i++)
 	{
-		mixer_saturateOutputs(activeParameters[UNUSED_PAR_GLO_SAT]/127.f, &output[pos],&output[pos+1],&output2[pos],&output2[pos+1]);
+		output[i] = mixer_to24(bus1[i] + fxRet1[i]);
+		output2[i] = mixer_to24(bus2[i] + fxRet2[i]);
 	}
-	*/
-
-
+	sh_cpuBlockEnd();
 }
