@@ -41,6 +41,9 @@ const uint8_t sh_modTargetLocal[SH_MOD_TARGETS_PER_CH] =
 	SHP_LFO_FREQ,
 };
 
+/* channel targets added in 0.5, numbered after all of the above */
+const uint8_t sh_modExtLocal[SH_MOD_EXT_PER_CH] = { SHP_RING_AMT, SHP_RING_FREQ };
+
 typedef struct
 {
 	uint32_t phase;
@@ -324,7 +327,7 @@ static void updateStrip(uint8_t ch, ShChannel* c, const uint8_t* p)
 /* ring modulator: out = x * ((1 - a) + a * carrier) */
 static void ringMod(ShChannel* c, uint8_t ch, const uint8_t* p, float* out)
 {
-	const float a = p[SHP_RING_AMT] * (1.f / 127.f);
+	const float a = eff(c, p, SHP_RING_AMT);   /* CV can open the ring */
 	if(a <= 0.f) return;
 	const float dry = 1.f - a;
 	const uint8_t src = p[SHP_RING_SRC];

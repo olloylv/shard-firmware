@@ -119,6 +119,7 @@ s += [P("Channels and triggers", h2),
         "<b>Fwt</b> FX dry/wet, <b>Fx1–Fx4</b> effect P1–P4."),
       B("Then the parameters of <b>any</b> channel: " + code("3sw") + " = channel 3, Sweep. Empty engine slots are skipped."),
       B("<b>VO</b>: 1 V/oct pitch; at 100 % amount calibrated and quantised to semitones."),
+      B("Ring amount / freq of channels 1–6 (" + code("1rn") + ", " + code("1rf") + ") come last, after channel 6."),
 
       P("PERF: morph", h2),
       B("Knobs: <b>Mrp</b> amount · <b>Mtg</b> target kit · <b>Alg</b> algorithm · <b>Shp</b> sharpness. "

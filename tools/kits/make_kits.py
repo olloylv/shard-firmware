@@ -90,11 +90,19 @@ VOCT = 0xFF
 GLOBAL = {"mrp": 1, "mtg": 2, "msh": 3, "fwt": 4, "fx1": 5, "fx2": 6, "fx3": 7, "fx4": 8}
 
 
+MXB = T.get("mod_ext_base", MCB + 6 * MTPC)
+MXPC = T.get("mod_ext_per_ch", 0)
+MX = T.get("mod_ext_local", [])
+
+
 def mod_dest(ch, local=None, engine_slot=None, voct=False):
     if voct:
         t = MT.index(VOCT)
     elif engine_slot is not None:
         t = MT.index(L["E0"] + engine_slot)
+    elif L[local] in MX:
+        # targets added in 0.5 (ring), numbered after all older channel targets
+        return MXB + ch * MXPC + MX.index(L[local])
     else:
         t = MT.index(L[local])
     return MCB + ch * MTPC + t
@@ -1151,7 +1159,8 @@ def fix_kit(kit, path, log):
             if attempt >= 1:
                 # internal modulation can stretch a sound: take it away first
                 before = len(kit.cv)
-                kit.cv = [e for e in kit.cv if not (e[4] >= MCB and (e[4] - MCB) // MTPC == ch)]
+                kit.cv = [e for e in kit.cv if not ((MCB <= e[4] < MXB and (e[4] - MCB) // MTPC == ch)
+                                                or (e[4] >= MXB and (e[4] - MXB) // MXPC == ch))]
                 if len(kit.cv) != before:
                     continue
             shorten(kit.ch[ch], k == 6)

@@ -139,6 +139,8 @@ void DumpJson(const char* path) {
   fprintf(f, " \"mod_ch_base\": %d, \"mod_globals\": %d,\n", SH_MOD_CH_BASE, SH_MOD_GLOBALS);
   fprintf(f, " \"mod_targets_per_ch\": %d, \"mod_target_local\": [", SH_MOD_TARGETS_PER_CH);
   for (int i = 0; i < SH_MOD_TARGETS_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modTargetLocal[i]);
+  fprintf(f, "],\n \"mod_ext_base\": %d, \"mod_ext_per_ch\": %d, \"mod_ext_local\": [", SH_MOD_EXT_BASE, SH_MOD_EXT_PER_CH);
+  for (int i = 0; i < SH_MOD_EXT_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modExtLocal[i]);
   fprintf(f, "],\n \"engines\": [\n");
   for (int e = 0; e < sh_engineCount(); ++e) {
     const ShEngineInfo* info = sh_engineInfo(e);

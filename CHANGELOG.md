@@ -10,7 +10,8 @@ Firmware:
   `/shard/prj00/glo.cfg`.
 - **Ring modulator per channel**, right after the engine (FLT page): `Rng` amount, `RFq` 20 Hz – 5.1 kHz,
   `RSr` carrier sine/triangle/square or the output of channel 1–6. Uses the three free slots of the
-  channel block; older kits load with the ring off.
+  channel block; older kits load with the ring off. Ring amount and frequency of every channel are new CV
+  matrix destinations, appended after the existing ones (older destination numbers are unchanged).
 - **Ring modulator FX** is back as FX type `rng`, appended after `del` (glitch keeps its number): carrier
   Sin/Tri/Saw/Rec/Noise/PWM, frequency, AM bias, stereo spread, random carrier jump per hit.
 - **Output stage**: channels and FX return are summed in floating point, a soft limiter (knee about

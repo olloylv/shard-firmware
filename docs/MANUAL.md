@@ -51,9 +51,9 @@ multiplied by the other channel's final output (after its AEG and volume): it on
 other channel sounds, and its envelope shapes this one. A channel rendered after this one is heard one
 audio block late (1.45 ms); choosing the channel itself multiplies it by its own previous block.
 
-Kits from older versions have 0 in these slots, so the ring modulator is off. The ring parameters can be
-morphed but are not CV matrix destinations (adding destinations would renumber the existing ones and
-break kits).
+Kits from older versions have 0 in these slots, so the ring modulator is off. `Rng` and `RFq` can be
+morphed and are CV matrix destinations (at the end of the list, see below); a CV on `Rng` can open the
+ring even when the knob is at 0.
 
 ### Accent inputs
 
@@ -80,7 +80,10 @@ The destination list starts with the global targets:
 | `Fx1`–`Fx4` | parameters P1–P4 of the current effect |
 
 Then come the channel parameters: `VO` (1 V/oct pitch), the engine parameters and the common strip (Atk,
-Dec, Slp, filter Frq/Res/Drv, Vol, Pan, SR, Drv, Bit, LFO rate). On the LCD a destination looks like
+Dec, Slp, filter Frq/Res/Drv, Vol, Pan, SR, Drv, Bit, LFO rate). The ring modulator targets added in 0.5
+(`Rng` amount and `RFq` frequency, LCD `1rn` / `1rf`) come last, after channel 6's parameters, for all
+six channels: that way the numbers of the older destinations, and the kits that use them, stay the
+same. On the LCD a destination looks like
 `3sw`: channel number and short name. While editing, the full name is shown, e.g. `C3 tBD  SweepDec`.
 
 Empty engine slots are skipped while scrolling. If a destination points at a slot the current engine
