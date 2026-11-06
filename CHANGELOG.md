@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.5 — 2026-11-07
+
+Firmware:
+
+- **Kit banks.** Up to 100 banks of 128 kits on the card (`/shard/prj00` … `prj99`, name in `prj.nfo`).
+  The LOAD/SAVE button now steps Load Kit → Save Kit → Save Morph → Load Bank → Save Bank. The current
+  bank is kept in `/shard/bank.idx` and restored at power-on; global settings stay in
+  `/shard/prj00/glo.cfg`.
+- **Ring modulator per channel**, right after the engine (FLT page): `Rng` amount, `RFq` 20 Hz – 5.1 kHz,
+  `RSr` carrier sine/triangle/square or the output of channel 1–6. Uses the three free slots of the
+  channel block; older kits load with the ring off.
+- **Ring modulator FX** is back as FX type `rng`, appended after `del` (glitch keeps its number): carrier
+  Sin/Tri/Saw/Rec/Noise/PWM, frequency, AM bias, stereo spread, random carrier jump per hit.
+- **Output stage**: channels and FX return are summed in floating point, a soft limiter (knee about
+  −1 dBFS) replaces hard 16-bit clipping, and the DACs run with 24-bit samples. Sample rate unchanged.
+- Removed the `idl` screensaver diagnostics from the global page.
+
+Banks (640 kits):
+
+- 00 `SHARD05` — factory bank 0.5, unchanged.
+- 01 `TECHNO` — kick, rumble, atmosphere, rim/snare, clap, hats; pumping rumble and atmosphere.
+- 02 `ELECTRO` — hard Detroit electro: 808-style kicks, cowbells/toms/blips, zaps and lasers.
+- 03 `PSY` — dark / forest psytrance: rolling K-B-B-B bass with growl, psychedelic FX (second version,
+  denser and darker than the first draft).
+- 04 `INDSTRL` — hard industrial: overdriven kicks, rumble, metal and noise.
+
+Tools:
+
+- `make_techno.py`, `make_electro.py`, `make_psy.py`, `make_industrial.py` and the shared
+  `bank_common.py` build banks 01–04 on top of `make_kits.py`; `bank_txt.py` lists tempos per kit.
+- The desktop renderer mirrors the float mix bus and the limiter (its `clip` metric counts samples that
+  would have hit the 16-bit limit), plays event lists (`.ev`: time, channel, velocity, alt) and knows the
+  ring modulator parameters.
+
 ## Factory bank 0.5 — 2026-11-01
 
 - All 128 kits rebuilt. Voices are picked from scored pools: every candidate is rendered and measured as

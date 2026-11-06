@@ -79,7 +79,7 @@ frames = [Frame(M + 5 * mm, top, W - 2 * M - 5 * mm, HEAD_H, id="head", leftPadd
           Frame(M, M + 5 * mm, colw, top - M - 7 * mm, id="L", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0),
           Frame(M + colw + GAP, M + 5 * mm, colw, top - M - 7 * mm, id="R", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)]
 
-VERSION = "0.4"
+VERSION = "0.5"
 out = sys.argv[1]
 doc = BaseDocTemplate(out, pagesize=A4, leftMargin=M, rightMargin=M, topMargin=M, bottomMargin=M,
                       title="SHARD v" + VERSION + " quick reference", author="SHARD")
@@ -88,7 +88,7 @@ doc.addPageTemplates([PageTemplate(id="p", frames=frames, onPage=deco)])
 s = []
 s += [P("SHARD <font name='C' size='13' color='#5B6168'>v" + VERSION + " · custom firmware for the Erica Synths LXR Eurorack</font>", title),
       P("LXR panel and menus, but instead of fixed voices there are 23 engines, any of them on any of the 6 channels. "
-        "A common channel strip, a CV matrix that reaches any parameter of any channel, firmware update from the SD card menu.", sub),
+        "A common channel strip with ring mod, a CV matrix that reaches any parameter of any channel, 100 kit banks, firmware update from the SD card menu.", sub),
       FrameBreak()]
 
 # ---------- LEFT ----------
@@ -103,12 +103,12 @@ s += [P("Channels and triggers", h2),
              ["OSC", "<b>Eng</b> engine, Tun note, Fin ±64 cents, engine parameters 1–5"],
              ["MOD/FM/SMP", "engine parameters 6–29; names come from the engine, empty slots are skipped"],
              ["AEG", "Atk, Dec, Slp, Rep (clap retrigger), DcA, Vel (velocity → level), Mod: AD / off"],
-             ["FLT", "Frq, Res, Typ (off/LP/HP/BP/UBP/Nch/Pk/LP2), Drv (40 = unity gain)"],
+             ["FLT", "Frq, Res, Typ (off/LP/HP/BP/UBP/Nch/Pk/LP2), Drv (40 = unity gain) · ring: <b>Rng</b> amount, RFq 20 Hz–5 kHz, RSr sin/tri/sqr or c1–c6 (another channel)"],
              ["MIX", "Vol, Pan, SR (sample rate), Drv, <b>Out</b> (St1, St2, L1, R1, L2, R2, <b>FX</b>), <b>Bit</b>"],
              ["LFO", "Frq, Ofs, Wav, Rtg (retrigger from channel 1–6)"]],
             [22 * mm, colw - 22 * mm]),
       Spacer(1, 3),
-      P("Channel chain: <b>engine → filter → AEG → velocity → drive → volume → SR → Bit → pan/output</b>."),
+      P("Channel chain: <b>engine → ring → filter → AEG → velocity → drive → volume → SR → Bit → pan/output</b>."),
       B("Changing the engine on the panel loads its defaults; loading a kit keeps the stored parameters."),
       B("Engines with their own envelope (Plaits drums, tBD, tSD, EFM, Zap, Crs) default to AEG <b>Mod = off</b>."),
 
@@ -132,10 +132,12 @@ s += [P("Channels and triggers", h2),
       Spacer(1, 2),
 
       P("FX: shared effect bus", h2),
-      B("Types: <b>off · drv</b> (tube/fold/clip) <b>· glt · cmp · del</b> (Del / Ping-pong)."),
+      B("Types: <b>off · drv</b> (tube/fold/clip) <b>· glt · cmp · del</b> (Del / Ping-pong) <b>· rng</b>."),
       B("<b>glt</b>: glitch triggered by hits of channels with Out = FX: <b>len</b> slice 15–300 ms, <b>chc</b> chance, "
         "<b>var</b> set of actions (repeat, reverse, ±octave, ratchet, tape stop, pitch steps), <b>rep</b> 1–8 repeats."),
-      B("Only <b>channels with MIX → Out = FX</b> reach the effect. The factory bank already sets this."),
+      B("<b>rng</b>: ring mod. <b>wav</b> carrier (Sin/Tri/Saw/Rec/Noi/PWM), <b>frq</b> 20 Hz–5 kHz, <b>am</b> ring → AM, "
+        "<b>spr</b> stereo detune, <b>rnd</b> random carrier jump per hit."),
+      B("Only <b>channels with MIX → Out = FX</b> reach the effect. The banks already set this."),
       B("drv clip / fold: keep P2 = 0, otherwise high drive can self-oscillate."),
       ]
 s.append(FrameBreak())
@@ -176,25 +178,25 @@ et.setStyle(TableStyle([("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FBEDE5
 s += [P("Engines (23)", h2), et]
 
 s += [
-      P("SD card and factory bank (128 kits)", h2),
-      B("Kits: " + code("/shard/prj00/*.snd") + ", state: " + code("/shard/state.idx") +
-        ". LXR kits are stored separately and are not touched."),
-      table([["Slots", "Group: dominant engines (≥ 4 of 6 channels)"],
-             ["0–31", "<b>MD</b>: tBD tSD tCP tHH EFM GND"],
-             ["32–63", "<b>PL</b>: Plaits aBD sBD aSD sSD pHH Mdl Str Prt"],
-             ["64–111", "<b>ID</b>: Zap Crs Byt Rng Cmb, IDM madness"],
-             ["112–127", "<b>HY</b>: hybrids of MD/PL/ID"]],
-            [16 * mm, colw - 16 * mm]),
+      P("Kit banks · SD card", h2),
+      B("LOAD/SAVE steps: <b>Load Kit → Save Kit → Save Morph → Load Bank → Save Bank</b>. Up to 100 banks of 128 kits in "
+        + code("/shard/prj00…99") + "; the last bank comes back at power-on. LXR kits are not touched."),
+      table([["Bank", "Contents · channel roles 1–6 (T7 = open hat on 6)"],
+             ["00", "<b>SHARD05</b> factory: MD 0–31, PL 32–63, ID 64–111, HY 112–127 · kick, perc, FX, snare, clap, hat"],
+             ["01", "<b>TECHNO</b> · kick, rumble, atmosphere, rim/snare, clap, hat"],
+             ["02", "<b>ELECTRO</b> Detroit · 808 kick, perc, zaps, snare, clap, hat"],
+             ["03", "<b>PSY</b> dark/forest · kick, rolling bass, FX, rim, clap, hat"],
+             ["04", "<b>INDSTRL</b> · driven kick, rumble, metal, snare, clap, hat"]],
+            [9 * mm, colw - 9 * mm]),
       Spacer(1, 2),
-      P("Channel roles: 1 kick · 2 perc/tom · 3 FX · 4 snare · 5 clap · 6 closed hat · T7 open hat. "
-        "Every kit in a key, levels balanced against the kick, no clipping."),
+      P("Every kit in a key, levels balanced against the kick. Output: float mix, soft limiter, 24-bit DACs."),
 
       P("Global menu · SHIFT + SAVE/LOAD", h2),
       B("<b>cpu</b>: peak load of the audio block, %. Init kit ≈ 47 %; 4–5 channels of Mdl/Prt ≈ 98 %."),
       B("<b>upd</b>: firmware update. Put " + code("LXRE_SHARD_Vx.x.img") +
         " in the SD root → upd → pick the file with the encoder → press, then press again to confirm."),
       B("Fallback: hold the encoder at power-on until \"LXR Updater\"; the bootloader flashes " + code("LXRE*.img") + "."),
-      B("<b>ssv</b>: screensaver off/2m/5m/30s/10s, level meters of the six channels. <b>idl</b>: idle time and last input."),
+      B("<b>ssv</b>: screensaver off/2m/5m/30s/10s, level meters of the six channels."),
       P("Cheat sheet", h2),
       B("AEG Dec: 20 ≈ 0.27 s · 30 ≈ 0.45 s · 50 ≈ 0.9 s · 80 ≈ 2.5 s · 90 ≈ 3.5 s."),
       B("Silent channel → check Out, Vol and the filter (HP on hats/cymbals)."),
