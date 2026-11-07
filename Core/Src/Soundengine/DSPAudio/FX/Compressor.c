@@ -101,90 +101,77 @@ void Compressor_setRatio(Compressor *c, uint8_t r)
 	}
 }
 
+/* SHARD 0.5: the gain computer runs in float with fast log2/exp2 instead of
+ * double logf/expf per sample (about 1/6 of the audio block on the STM32).
+ * Same curve: dB domain, peak detector, attack/release on the over-threshold
+ * level. Error of the approximations about 0.01 dB. */
+#define DB_PER_LOG2 6.0205999f		/* 20 * log10(2) */
+
+static inline float fastLog2(float x)
+{
+	union { float f; uint32_t i; } v = { x };
+	const float e = (float)(int32_t)((v.i >> 23) & 0xFF) - 127.f;
+	v.i = (v.i & 0x007FFFFF) | 0x3F800000;	/* mantissa in [1,2) */
+	const float m = v.f;
+	/* log2(m) on [1,2), 3rd order minimax */
+	return e + ((0.15392465f * m - 1.0295584f) * m + 3.010851f) * m - 2.1338866f;
+}
+
+static inline float fastExp2(float x)
+{
+	if(x < -60.f) return 0.f;
+	if(x > 60.f) x = 60.f;
+	const float fl = floorf(x);
+	const float f = x - fl;					/* [0,1) */
+	/* 2^f on [0,1), 3rd order */
+	const float p = ((0.07902041f * f + 0.22412837f) * f + 0.69683624f) * f + 0.99981246f;
+	union { float f; uint32_t i; } v;
+	v.i = (uint32_t)((int32_t)fl + 127) << 23;
+	return p * v.f;
+}
+
 void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
-
-
-	int32_t x;
+	(void)outR;
 	int32_t* stereoOut = (int32_t*)outL;
+	const float tresh = c->tresh;
+	const float att = c->attack;
+	const float rel = c->release;
+	const float slope = (c->ratio - 1.f) * (1.f / DB_PER_LOG2);	/* dB -> log2 of the gain */
+	const float makeup = c->markupGain;
+	float env = (float)c->env;
 
-	int16_t left[size];
-	int16_t right[size];
-
-	if(channels==2)
+	for(uint8_t i = 0; i < size; i++)
 	{
+		const int16_t l = fxBuffer[i*2];
+		const int16_t r = channels == 2 ? fxBuffer[i*2+1] : l;
+		const float in = channels == 2 ? (l + r) * (0.5f / 32768.f) : l * (1.f / 32768.f);
+		const float peakdB = DB_PER_LOG2 * fastLog2(fabsf(in) + (float)DC_OFFSET);
+		float overdB = peakdB - tresh;
+		if(overdB < 0.f) overdB = 0.f;
 
-		for(uint8_t i=0; i<size;i++)
+		/* attack or release */
+		const float coeff = overdB > env ? att : rel;
+		env = overdB + coeff * (env - overdB);
+
+		const float g = (env > 1e-4f ? fastExp2(env * slope) : 1.f) * makeup;
+
+		if(channels == 2)
 		{
-			//--- Compressor ---
-			float in = 0.5 * (fxBuffer[i*2]/32768.f) + 0.5 * (fxBuffer[i*2+1]/32768.f);
-			double peak = fabs(in);
-
-			//value over thresh
-			peak += DC_OFFSET;
-			double peakdB = lin2dB(peak);
-			double overdB = peakdB - c->tresh;
-			if ( overdB < 0.0 )
-				overdB = 0.0;
-
-			// dynamic selection: attack or release?
-			double  coeff = overdB > c->env ? c->attack : c->release;
-			c->env = overdB + coeff * (c->env - overdB);
-			//c->env = c->env + (1-coeff) * (overdB -c->env); //should be the same as above, without 1-
-
-			double gr = c->env * (c->ratio - 1.0);
-			gr = dB2lin(gr);
-			//debugWatch = gr;
-
-			left[i]  = __SSAT(fxBuffer[i*2] * gr * c->markupGain, 16);//gain;
-			right[i] = __SSAT(fxBuffer[i*2+1] * gr * c->markupGain, 16);//gain;
-
-
-			//--- Output transfer ---
-			//TODO can be optimized quite a bit with SIMD
-			const uint8_t idx1 = i*2;
-			const uint8_t idx2 = i*2+1;
-			//int16_t wet = __SSAT((int32_t)(left[i] * 32768.0f), 16);
-			//int16_t wet2 = __SSAT((int32_t)(right[i] * 32768.0f), 16);
-			x = __PKHBT(fxBuffer[idx1] + __SSAT((left[i] - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((right[i] - fxBuffer[idx2]) * dryWet,16), 16);
-			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
+			const int16_t wl = (int16_t)__SSAT((int32_t)(l * g), 16);
+			const int16_t wr = (int16_t)__SSAT((int32_t)(r * g), 16);
+			const int32_t x = __PKHBT(l + __SSAT((int32_t)((wl - l) * dryWet), 16), r + __SSAT((int32_t)((wr - r) * dryWet), 16), 16);
 			*stereoOut = __QADD16(*stereoOut, x);
 			stereoOut++;
 		}
-	}
-	else
-	{
-		for(uint8_t i=0; i<size;i++)
+		else
 		{
-			const uint8_t idx1 = i*2;
-			//--- Compressor ---
-			float in = fxBuffer[idx1]/32768.f;
-			double peak = fabs(in);
-
-			//value over thresh
-			peak += DC_OFFSET;
-			double peakdB = lin2dB(peak);
-			double overdB = peakdB - c->tresh;
-			if ( overdB < 0.0 )
-				overdB = 0.0;
-
-			// dynamic selection: attack or release?
-			double  coeff = overdB > c->env ? c->attack : c->release;
-			c->env = overdB + coeff * (c->env - overdB);
-			//c->env = c->env + (1-coeff) * (overdB -c->env); //should be the same as above, without 1-
-
-			double gr = c->env * (c->ratio - 1.0);
-			gr = dB2lin(gr);
-			//debugWatch = gr;
-
-			left[i]  = fxBuffer[idx1] * gr * c->markupGain;//gain;
-
-
-			//--- Output transfer ---
-			const int16_t dw = fxBuffer[idx1] + __SSAT((left[i] - fxBuffer[idx1]) * dryWet,16);
-			*outL = __QADD16(*outL, dw);
+			const int16_t wl = (int16_t)__SSAT((int32_t)(l * g), 16);
+			const int16_t dw = (int16_t)(l + __SSAT((int32_t)((wl - l) * dryWet), 16));
+			*outL = (int16_t)__QADD16(*outL, dw);
 			outL += 2;
 		}
 	}
+	c->env = env;
 }
 

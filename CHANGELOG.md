@@ -17,6 +17,10 @@ Firmware:
 - **Output stage**: channels and FX return are summed in floating point, a soft limiter (knee about
   −1 dBFS) replaces hard 16-bit clipping, and the DACs run with 24-bit samples. Sample rate unchanged.
 - Removed the `idl` screensaver diagnostics from the global page.
+- Compressor FX: the gain computer runs in float with fast log/exp approximations instead of double
+  `logf`/`expf` per sample. Same sound (difference below −80 dB), much less CPU; kits with Modal or
+  Particles plus the compressor no longer overload.
+- MOD pages: the scroll marks (`<`, `>`, `*`) now look at the pages of the selected channel.
 
 Banks (640 kits):
 

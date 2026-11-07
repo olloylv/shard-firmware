@@ -1307,7 +1307,7 @@ static uint8_t checkScrollSign(uint8_t activePage, uint8_t activeParameter)
 	{
 		if(is2ndPage) {
 			//if we are on 2nd screen, and there are more sub-pages after this show "*" to signify both ways are available
-			if((activePage < 2-1) && (pgm_read_byte(&modMatrixPages[MENU_MIDI_PAGE][activePage+1].top1) != TEXT_EMPTY))
+			if((activePage < NUM_SUB_PAGES-1) && (pgm_read_byte(&modMatrixPages[menu_activePage][activePage+1].top1) != TEXT_EMPTY))	/* SHARD: was the MIDI page row */
 				return '*';
 			else // on 2nd screen, no sub-pages after this
 				return '<';
