@@ -41,12 +41,11 @@
 #endif
 #define DMA_MASK ((OUTPUT_DMA_SIZE*2)-1)
 
-/* SHARD: 1 = 24 bit samples to the DACs (0.5b2 test, silent on hardware),
- * 0 = 16 bit as in the LXR firmware. The float mix bus and the soft limiter
- * are used either way. */
+/* SHARD: 1 = 24 bit samples to the DACs (0.5), 0 = 16 bit as in the LXR
+ * firmware. The float mix bus and the soft limiter are used either way. */
 #include <stdint.h>
 #ifndef SH_DAC_24BIT
-#define SH_DAC_24BIT 0
+#define SH_DAC_24BIT 1
 #endif
 #if SH_DAC_24BIT
 typedef uint32_t sh_dma_t;

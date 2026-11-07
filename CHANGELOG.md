@@ -15,8 +15,7 @@ Firmware:
 - **Ring modulator FX** is back as FX type `rng`, appended after `del` (glitch keeps its number): carrier
   Sin/Tri/Saw/Rec/Noise/PWM, frequency, AM bias, stereo spread, random carrier jump per hit.
 - **Output stage**: channels and FX return are summed in floating point, a soft limiter (knee about
-  −1 dBFS) replaces hard 16-bit clipping. The DACs stay at 16 bit: 24-bit output (`SH_DAC_24BIT` in
-  `config.h`) was silent on hardware and is off until it is fixed.
+  −1 dBFS) replaces hard 16-bit clipping, and the DACs run with 24-bit samples. Sample rate unchanged.
 - Removed the `idl` screensaver diagnostics from the global page.
 
 Banks (640 kits):

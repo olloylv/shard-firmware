@@ -618,6 +618,15 @@ IN_ITCM_RAM static inline void mixer_addFloat(uint8_t dest, const float panL, co
 
 IN_ITCM_RAM void mixer_calcNextSampleBlock(sh_dma_t* output, sh_dma_t* output2)
 {
+	/* note ons from the trigger inputs (lost in 0.5b2: silent, fixed in 0.5) */
+	voiceControl_processQueue();
+#if !EURORACK_MODULE
+	r2_Available = (switch_r2_GPIO_Port->IDR & switch_r2_Pin)>0;
+	l1_Available = (switch_l1_GPIO_Port->IDR & switch_l1_Pin)>0;
+	l2_Available = (switch_l2_GPIO_Port->IDR & switch_l2_Pin)>0;
+	r1_Available = (switch_r1_GPIO_Port->IDR & switch_r1_Pin)>0;
+#endif
+
 	sh_cpuBlockStart();
 
 	//SHARD: LFOs and CV matrix, then the six channels
