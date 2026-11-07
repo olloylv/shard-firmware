@@ -318,10 +318,9 @@ step (jitter of an endless pot) doesn't reset the timer.
 ## Output stage
 
 New in 0.5. The channels and the FX return are summed in floating point (no 16-bit clipping inside the
-mix), then a soft limiter (transparent up to about −1 dBFS, a tanh shoulder above) and the two DACs run
-with 24-bit samples instead of 16. The sample rate stays 44.1 kHz: the engines and the CPU budget are
-built around it. Loud kits that used to clip hard now saturate softly; quiet passages have a lower
-noise floor.
+mix), then a soft limiter (transparent up to about −1 dBFS, a tanh shoulder above) before the 16-bit
+DACs. Loud kits that used to clip hard now saturate softly. The sample rate stays 44.1 kHz: the engines
+and the CPU budget are built around it.
 
 ## CPU load
 
@@ -352,7 +351,7 @@ The firmware needs the Arm GNU Toolchain with C++ (`arm-none-eabi-g++`); Arm's o
 | `Core/Src/Shard/sh_update.c` | update from the menu |
 | `Core/Src/Shard/engines/` | engines (C++) and the registry |
 | `Core/Src/Shard/sh_bank.c` | kit banks |
-| `Core/Src/Soundengine/DSPAudio/mixer.c` | float mix bus, soft limiter, 24-bit output |
+| `Core/Src/Soundengine/DSPAudio/mixer.c` | float mix bus, soft limiter |
 | `Core/Src/Soundengine/DSPAudio/FX/Glitch.c` | glitch effect |
 | `Core/Src/Soundengine/DSPAudio/FX/Ringmod.c` | ring modulator effect |
 | `Core/ThirdParty/` | subset of Plaits and stmlib (MIT) |

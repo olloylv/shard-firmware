@@ -561,12 +561,19 @@ IN_ITCM_RAM static inline float mixer_softLimit(float x)
 	return x < 0.f ? -y : y;
 }
 
-IN_ITCM_RAM static inline uint32_t mixer_to24(float bus)
+#if SH_DAC_24BIT
+IN_ITCM_RAM static inline uint32_t mixer_toDac(float bus)
 {
 	int32_t s = (int32_t)(mixer_softLimit(bus * (1.f / 32768.f)) * 8388607.f);
 	/* first half word sent = bits 23..8, second = bits 7..0 in its upper byte */
 	return ((uint32_t)(s & 0xFF) << 24) | ((uint32_t)(s >> 8) & 0xFFFF);
 }
+#else
+IN_ITCM_RAM static inline int16_t mixer_toDac(float bus)
+{
+	return (int16_t)(mixer_softLimit(bus * (1.f / 32768.f)) * 32767.f);
+}
+#endif
 
 /* add one channel block to the float buses (bus1 = DAC2 pair, bus2 = DAC1 pair,
  * interleaved L R as the DMA buffers) or to the 16 bit FX send */
@@ -609,7 +616,7 @@ IN_ITCM_RAM static inline void mixer_addFloat(uint8_t dest, const float panL, co
 	}
 }
 
-IN_ITCM_RAM void mixer_calcNextSampleBlock(uint32_t* output, uint32_t* output2)
+IN_ITCM_RAM void mixer_calcNextSampleBlock(sh_dma_t* output, sh_dma_t* output2)
 {
 	sh_cpuBlockStart();
 
@@ -644,8 +651,8 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(uint32_t* output, uint32_t* output2)
 
 	for(uint8_t i = 0; i < OUTPUT_DMA_SIZE*2; i++)
 	{
-		output[i] = mixer_to24(bus1[i] + fxRet1[i]);
-		output2[i] = mixer_to24(bus2[i] + fxRet2[i]);
+		output[i] = mixer_toDac(bus1[i] + fxRet1[i]);
+		output2[i] = mixer_toDac(bus2[i] + fxRet2[i]);
 	}
 	sh_cpuBlockEnd();
 }

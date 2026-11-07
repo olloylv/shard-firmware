@@ -23,7 +23,7 @@ be put on any of the six channels.**
   stereo spread, random carrier per hit).
 - **Kit banks**: up to 100 banks of 128 kits on the card, loaded and saved from the LOAD/SAVE button; the
   last bank comes back at power-on.
-- **Cleaner output**: the mix is summed in floating point, followed by a soft limiter and 24-bit DACs.
+- **Cleaner output**: the mix is summed in floating point, followed by a soft limiter instead of hard clipping.
 - **Firmware update from the menu** — no power cycling, the bootloader stays as a fallback.
 - **Screensaver** with live channel level meters, CPU load display.
 - **Five banks, 640 kits**: 00 factory (MD-style, Plaits, IDM, hybrids), 01 techno, 02 electro,

@@ -39,6 +39,6 @@ enum
 };
 
 void mixer_init();
-void  mixer_calcNextSampleBlock(uint32_t* output,uint32_t* output2);	//SHARD: 24 bit I2S samples
+void  mixer_calcNextSampleBlock(sh_dma_t* output,sh_dma_t* output2);	//SHARD: see SH_DAC_24BIT
 
 #endif /* MIXER_H_ */

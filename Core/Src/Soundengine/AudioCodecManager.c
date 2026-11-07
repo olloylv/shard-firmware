@@ -14,9 +14,9 @@
 #include "Soundengine/datatypes.h"
 //------------------------------------------------------------------
 #if DMA_MODE_ACTIVE
-//SHARD: one element per 24 bit sample (two DMA half words), two blocks per buffer
-INDTCMZ uint32_t dma_buffer[OUTPUT_DMA_SIZE*4];
-INDTCMZ uint32_t dma_buffer2[OUTPUT_DMA_SIZE*4];
+//SHARD: one element per sample (24 bit: two DMA half words), two blocks per buffer
+INDTCMZ sh_dma_t dma_buffer[OUTPUT_DMA_SIZE*4];
+INDTCMZ sh_dma_t dma_buffer2[OUTPUT_DMA_SIZE*4];
 #endif
 
 volatile INDTCMZ uint8_t bCurrentSampleValid = 0;

@@ -190,7 +190,7 @@ s += [
              ["04", "<b>INDSTRL</b> · driven kick, rumble, metal, snare, clap, hat"]],
             [9 * mm, colw - 9 * mm]),
       Spacer(1, 2),
-      P("Every kit in a key, levels balanced against the kick. Output: float mix, soft limiter, 24-bit DACs."),
+      P("Every kit in a key, levels balanced against the kick. Output: float mix bus, soft limiter."),
 
       P("Global menu · SHIFT + SAVE/LOAD", h2),
       B("<b>cpu</b>: peak load of the audio block, %. Init kit ≈ 47 %; 4–5 channels of Mdl/Prt ≈ 98 %."),

@@ -16,8 +16,8 @@
 #include "stm32f7xx_hal.h"
 #include "config.h"
 
-extern INDTCMZ uint32_t dma_buffer[OUTPUT_DMA_SIZE*4]; 		// *4 because we need 16 stereo samples = *2
-extern INDTCMZ uint32_t dma_buffer2[OUTPUT_DMA_SIZE*4]; 	// *4 because we need 16 stereo samples = *2
+extern INDTCMZ sh_dma_t dma_buffer[OUTPUT_DMA_SIZE*4]; 		// *4 because we need 16 stereo samples = *2
+extern INDTCMZ sh_dma_t dma_buffer2[OUTPUT_DMA_SIZE*4]; 	// *4 because we need 16 stereo samples = *2
 
 /* Mask for the bit EN of the I2S CFGR register */
 #define I2S_ENABLE_MASK                	 	0x0400
