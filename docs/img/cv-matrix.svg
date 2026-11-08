@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="340" viewBox="0 0 680 340" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" role="img">
+<title>SHARD CV matrix</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="0" y="0" width="680" height="340" rx="12" fill="#FFFFFF"/>
+<rect x="40" y="76" width="170" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.8"/>
+<text x="125.0" y="94.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#085041">CV 1–5</text>
+<text x="125.0" y="114.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#0F6E56">cv1–cv5, jacks</text>
+<path d="M210 104 L246 104" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="40" y="142" width="170" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.8"/>
+<text x="125.0" y="160.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#085041">LFO 1–6</text>
+<text x="125.0" y="180.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#0F6E56">lf1–lf6, one per channel</text>
+<path d="M210 170 L246 170" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="40" y="208" width="170" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.8"/>
+<text x="125.0" y="226.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#085041">Accents 1–6</text>
+<text x="125.0" y="246.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#0F6E56">ac1–ac6, gates</text>
+<path d="M210 236 L246 236" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="250" y="40" width="170" height="260" rx="8" fill="#F1EFE8" stroke="#888780" stroke-width="0.8"/>
+<text x="335.0" y="130.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">36 slots</text>
+<text x="335.0" y="150.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#5F5E5A">6 per channel</text>
+<text x="335.0" y="170.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#5F5E5A">source · amount · dest</text>
+<text x="335.0" y="190.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#5F5E5A">amount 0–100</text>
+<text x="335.0" y="210.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#5F5E5A">bipolar around the knob</text>
+<path d="M420 68 L466 68" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="470" y="40" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+<text x="555.0" y="58.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#3C3489">Global</text>
+<text x="555.0" y="78.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#534AB7">Mrp Mtg Msh Fwt Fx1–4</text>
+<path d="M420 136 L466 136" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="470" y="108" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+<text x="555.0" y="126.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#3C3489">Engine, ch 1–6</text>
+<text x="555.0" y="146.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#534AB7">VO pitch, params 1–14</text>
+<path d="M420 204 L466 204" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="470" y="176" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+<text x="555.0" y="194.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#3C3489">Strip, ch 1–6</text>
+<text x="555.0" y="214.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#534AB7">AEG, filter, mix, LFO</text>
+<path d="M420 272 L466 272" fill="none" stroke="#5F5E5A" stroke-width="1.2" marker-end="url(#a)"/>
+<rect x="470" y="244" width="170" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/>
+<text x="555.0" y="262.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#3C3489">Ring, ch 1–6</text>
+<text x="555.0" y="282.0" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="400" fill="#534AB7">Rng RFq, end of list</text>
+</svg>

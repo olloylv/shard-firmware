@@ -131,13 +131,16 @@ void DumpJson(const char* path) {
              "\"SLOPE\": %d, \"REPEAT\": %d, \"DECAY_ALT\": %d, \"VELVOL\": %d, \"AEG_MODE\": %d, \"FILT_FREQ\": %d, "
              "\"FILT_RESO\": %d, \"FILT_TYPE\": %d, \"FILT_DRIVE\": %d, \"VOL\": %d, \"PAN\": %d, \"SRATE\": %d, "
              "\"DRIVE\": %d, \"OUT\": %d, \"BITS\": %d, \"LFO_FREQ\": %d, \"LFO_OFFSET\": %d, \"LFO_WAVE\": %d, "
-             "\"LFO_RETRIG\": %d},\n",
+             "\"LFO_RETRIG\": %d, \"RING_AMT\": %d, \"RING_FREQ\": %d, \"RING_SRC\": %d},\n",
           SHP_ENGINE, SHP_TUNE, SHP_FINE, SHP_E0, SHP_ATTACK, SHP_DECAY, SHP_SLOPE, SHP_REPEAT, SHP_DECAY_ALT,
           SHP_VELVOL, SHP_AEG_MODE, SHP_FILT_FREQ, SHP_FILT_RESO, SHP_FILT_TYPE, SHP_FILT_DRIVE, SHP_VOL, SHP_PAN,
-          SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG);
+          SHP_SRATE, SHP_DRIVE, SHP_OUT, SHP_BITS, SHP_LFO_FREQ, SHP_LFO_OFFSET, SHP_LFO_WAVE, SHP_LFO_RETRIG,
+          SHP_RING_AMT, SHP_RING_FREQ, SHP_RING_SRC);
   fprintf(f, " \"mod_ch_base\": %d, \"mod_globals\": %d,\n", SH_MOD_CH_BASE, SH_MOD_GLOBALS);
   fprintf(f, " \"mod_targets_per_ch\": %d, \"mod_target_local\": [", SH_MOD_TARGETS_PER_CH);
   for (int i = 0; i < SH_MOD_TARGETS_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modTargetLocal[i]);
+  fprintf(f, "],\n \"mod_ext_base\": %d, \"mod_ext_per_ch\": %d, \"mod_ext_local\": [", SH_MOD_EXT_BASE, SH_MOD_EXT_PER_CH);
+  for (int i = 0; i < SH_MOD_EXT_PER_CH; ++i) fprintf(f, "%s%d", i ? ", " : "", sh_modExtLocal[i]);
   fprintf(f, "],\n \"engines\": [\n");
   for (int e = 0; e < sh_engineCount(); ++e) {
     const ShEngineInfo* info = sh_engineInfo(e);
@@ -184,28 +187,39 @@ void ApplyFx(uint16_t p, uint8_t value) {
     case PAR_FX_P3: FxBus_setParameter(2, flt); break;
     case PAR_FX_P4: FxBus_setParameter(3, flt); break;
     case PAR_FX_RATIO: Compressor_setRatio(&fxBus.compressor, value); break;
-    case PAR_FX_WAVE: break;
+    case PAR_FX_WAVE: Ringmod_setWave(&fxBus.ringmod, value); break;
     case PAR_FX_DELAY_TYPE: fxBus.delay.delayType = value; break;
     default: break;
   }
 }
 
-// adds a mono block to an interleaved stereo buffer according to a routing value
-void Route(uint8_t dest, float pl, float pr, const int16_t* d, int16_t* a, int16_t* b, int16_t* fx) {
-  auto add = [](int16_t& o, float v) {
-    float x = o + v; o = static_cast<int16_t>(x > 32767 ? 32767 : (x < -32768 ? -32768 : x));
+// adds a mono block to the float output buses (interleaved stereo) or to the 16 bit
+// FX send, according to a routing value; as mixer_addFloat() in the firmware (0.5)
+void Route(uint8_t dest, float pl, float pr, const int16_t* d, float* a, float* b, int16_t* fx) {
+  auto sat = [](int16_t& o, float v) {
+    float x = o + static_cast<float>(static_cast<int16_t>(v));
+    o = static_cast<int16_t>(x > 32767 ? 32767 : (x < -32768 ? -32768 : x));
   };
   for (int i = 0; i < kBlock; ++i) {
     switch (dest) {
-      case MIXER_ROUTING_DAC1_STEREO: add(b[2 * i], d[i] * pl); add(b[2 * i + 1], d[i] * pr); break;
-      case MIXER_ROUTING_DAC2_STEREO: add(a[2 * i], d[i] * pl); add(a[2 * i + 1], d[i] * pr); break;
-      case MIXER_ROUTING_DAC1_L: add(b[2 * i], d[i]); break;
-      case MIXER_ROUTING_DAC1_R: add(b[2 * i + 1], d[i]); break;
-      case MIXER_ROUTING_DAC2_L: add(a[2 * i], d[i]); break;
-      case MIXER_ROUTING_DAC2_R: add(a[2 * i + 1], d[i]); break;
-      default: add(fx[2 * i], d[i] * pl); add(fx[2 * i + 1], d[i] * pr); break;
+      case MIXER_ROUTING_DAC1_STEREO: b[2 * i] += d[i] * pl; b[2 * i + 1] += d[i] * pr; break;
+      case MIXER_ROUTING_DAC2_STEREO: a[2 * i] += d[i] * pl; a[2 * i + 1] += d[i] * pr; break;
+      case MIXER_ROUTING_DAC1_L: b[2 * i] += d[i]; break;
+      case MIXER_ROUTING_DAC1_R: b[2 * i + 1] += d[i]; break;
+      case MIXER_ROUTING_DAC2_L: a[2 * i] += d[i]; break;
+      case MIXER_ROUTING_DAC2_R: a[2 * i + 1] += d[i]; break;
+      default: sat(fx[2 * i], d[i] * pl); sat(fx[2 * i + 1], d[i] * pr); break;
     }
   }
+}
+
+// the output soft limiter of the firmware (mixer.c, SH_LIMIT_KNEE): input and output
+// normalised to full scale = 1
+float SoftLimit(float x) {
+  const float knee = 0.89f, a = std::fabs(x);
+  if (a <= knee) return x;
+  const float y = knee + (1.f - knee) * std::tanh((a - knee) / (1.f - knee));
+  return x < 0 ? -y : y;
 }
 
 // pattern: 6 lines of 16 steps; '.' rest, 'x' hit, 'X' accent, 'o' alt trigger (channel 6),
@@ -219,31 +233,44 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
     fprintf(stderr, "short kit file\n"); return 1;
   }
   fclose(f);
+  // <patPath> is either 6 lines of step patterns or, if it ends in ".ev", a list of
+  // events "<seconds> <channel 0-5> <velocity> <alt>" (e.g. converted from MIDI)
+  const std::string pp(patPath);
+  const bool events = pp.size() > 3 && pp.compare(pp.size() - 3, 3, ".ev") == 0;
+  struct Ev { double t; int ch; int vel; int alt; };
+  std::vector<Ev> ev;
   std::vector<std::string> pat;
   FILE* pf = fopen(patPath, "r");
   if (!pf) { perror(patPath); return 1; }
   char line[256];
-  while (fgets(line, sizeof(line), pf) && pat.size() < 6) {
+  while (fgets(line, sizeof(line), pf)) {
+    if (events) {
+      Ev e;
+      if (sscanf(line, "%lf %d %d %d", &e.t, &e.ch, &e.vel, &e.alt) == 4 && e.ch >= 0 && e.ch < SH_NUM_CHANNELS)
+        ev.push_back(e);
+      continue;
+    }
+    if (pat.size() >= 6) break;
     std::string l(line);
     while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
     if (!l.empty()) pat.push_back(l);
   }
   fclose(pf);
-  while (pat.size() < 6) pat.push_back("................");
+  while (pat.size() < 6) pat.push_back(events ? "" : "................");
 
   FxBus_init();
   sh_channelsInit(&kitParams[PAR_CH_BASE]);
   for (uint16_t p = PAR_FX_TYPE; p <= PAR_FX_DELAY_TYPE; ++p) ApplyFx(p, kitParams[p]);
 
   const double step = 60.0 / bpm / 4.0;
-  const int steps = bars * 16;
-  const int blocks = static_cast<int>((steps * step + 1.5) * kRate / kBlock);
+  const int steps = events ? 0 : bars * 16;
+  double endT = steps * step;
+  for (const Ev& e : ev) endT = std::max(endT, e.t);
+  const int blocks = static_cast<int>((endT + 1.5) * kRate / kBlock);
   std::vector<int16_t> out;
   double peak[SH_NUM_CHANNELS] = { 0 }, sq[SH_NUM_CHANNELS] = { 0 };
   double mixPeak = 0, outPeak = 0;
   long n = 0, clips = 0;
-  struct Ev { double t; int ch; int vel; int alt; };
-  std::vector<Ev> ev;
   for (int s = 0; s < steps; ++s)
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
       const std::string& l = pat[ch];
@@ -263,7 +290,8 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
       sh_trigger(ev[next].ch, ev[next].vel, ev[next].alt);
       ++next;
     }
-    int16_t a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 }, fx[2 * kBlock] = { 0 };
+    float a[2 * kBlock] = { 0 }, b[2 * kBlock] = { 0 };
+    int16_t fx[2 * kBlock] = { 0 }, ra[2 * kBlock] = { 0 }, rb[2 * kBlock] = { 0 };
     sh_beginBlock();
     sh_cvProcess();
     for (int ch = 0; ch < SH_NUM_CHANNELS; ++ch) {
@@ -278,12 +306,15 @@ int RenderKit(const char* kitPath, const char* patPath, double bpm, int bars, co
       sh_channelPan(ch, &pl, &pr);
       Route(sh_channelRouting(ch), pl, pr, buf, a, b, fx);
     }
-    FxBus_process(fx, &a[0], &a[1], &b[0], &b[1], kBlock);
+    FxBus_process(fx, &ra[0], &ra[1], &rb[0], &rb[1], kBlock);
     for (int i = 0; i < 2 * kBlock; ++i) {
-      const int pa = std::abs(static_cast<int>(a[i])), pb = std::abs(static_cast<int>(b[i]));
+      // bus level before the limiter; 'clip' counts the samples that would have
+      // clipped on the 16 bit bus (now rounded off by the limiter)
+      const float va = a[i] + ra[i], vb = b[i] + rb[i];
+      const float pa = std::fabs(va), pb = std::fabs(vb);
       outPeak = std::max(outPeak, std::max(pa, pb) / 32768.0);
       clips += (pa >= 32767) + (pb >= 32767);
-      float x = (a[i] + b[i]) * 0.8f;
+      float x = (SoftLimit(va / 32768.f) + SoftLimit(vb / 32768.f)) * 0.8f * 32768.f;
       x = x > 32767 ? 32767 : (x < -32768 ? -32768 : x);
       mixPeak = std::max(mixPeak, std::fabs(x) / 32768.0);
       out.push_back(static_cast<int16_t>(x));
@@ -384,7 +415,7 @@ int main(int argc, char** argv) {
   if (dir == "--levels") { AnalyseEngines(); return 0; }
   if (dir == "--dump" && argc > 2) { DumpJson(argv[2]); return 0; }
   if (dir == "--kit" && argc > 7) {
-    // --kit <kit.snd> <pattern.txt> <bpm> <bars> <out.wav|""> <metrics.json|"">
+    // --kit <kit.snd> <pattern.txt|events.ev> <bpm> <bars> <out.wav|""> <metrics.json|"">
     return RenderKit(argv[2], argv[3], atof(argv[4]), atoi(argv[5]), argv[6], argv[7]);
   }
   if (dir == "--hits" && argc > 4) return RenderHits(argv[2], atof(argv[3]), argv[4]);

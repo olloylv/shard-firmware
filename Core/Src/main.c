@@ -21,7 +21,10 @@
 #include "Preset/PresetManager.h"
 #include "Shard/sh_morph.h"
 #include "Shard/sh_bridge.h"
+#include "Shard/sh_bank.h"
+#include <string.h>
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/config.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <Soundengine/ModMatrix_Processor.h>
 #include "Soundengine/MIDI/Uart.h"
@@ -335,6 +338,10 @@ if(sd_card_ok)
 {
 	//SHARD keeps its kits and projects apart from the LXR ones
 	f_mkdir(SH_SD_ROOT);
+	//SHARD: kit banks /shard/prjNN, start in the last used one
+	sh_bankBoot();
+	strcpy(currentFolder, sh_bankFolder());
+	menu_loadedPresetNr[CURRENT_PROJECT] = sh_bankCurrent();
 
 
 
@@ -404,8 +411,8 @@ if(sd_card_ok)
 
 if(sd_card_ok)
 {
-	//return to project 0
-	f_chdir(SH_SD_ROOT "/prj00");
+	//return to the current bank
+	f_chdir(sh_bankFolder());
 
 	uint8_t lastUsedPreset;
 	preset_loadLastUsedPresetNrFromSD(&lastUsedPreset);
@@ -646,13 +653,17 @@ static void init_adc1(void)
 	}
 }
 
-// I2S2 and I2S3 feed the audio codecs: master transmit, Philips standard, 16 bit, 44.1 kHz, with MCLK.
+// I2S2 and I2S3 feed the audio codecs: master transmit, Philips standard, 24 bit (16 if SH_DAC_24BIT is 0), 44.1 kHz, with MCLK.
 static void init_i2s(I2S_HandleTypeDef *hi2s, SPI_TypeDef *instance)
 {
 	hi2s->Instance = instance;
 	hi2s->Init.Mode = I2S_MODE_MASTER_TX;
 	hi2s->Init.Standard = I2S_STANDARD_PHILIPS;
+#if SH_DAC_24BIT
+	hi2s->Init.DataFormat = I2S_DATAFORMAT_24B;
+#else
 	hi2s->Init.DataFormat = I2S_DATAFORMAT_16B;
+#endif
 	hi2s->Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
 	hi2s->Init.AudioFreq = I2S_AUDIOFREQ_44K;
 	hi2s->Init.CPOL = I2S_CPOL_HIGH;

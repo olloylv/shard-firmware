@@ -11,18 +11,23 @@ be put on any of the six channels.**
   and physical models (analogue/synthetic kick and snare, hat, modal resonator, string, particles),
   Machinedrum-inspired engines (tBD, tSD, tCP, tHH, EFM, GND) and IDM/glitch engines (Zap, Crush,
   bytebeat, ring cluster, comb).
-- **A common channel strip** on every channel: multimode filter with drive, AD envelope with clap
-  retrigger, drive, sample-rate reduction, bit crusher, pan, LFO.
+- **A common channel strip** on every channel: ring modulator (internal carrier or another channel),
+  multimode filter with drive, AD envelope with clap retrigger, drive, sample-rate reduction, bit
+  crusher, pan, LFO.
 - **CV matrix with 6 slots per channel** (36 in total). Sources: CV1–5, LFO1–6, accents. Destinations:
   morph amount/target/sharpness, FX dry/wet and P1–P4, 1 V/oct and every channel parameter.
 - **Kit morphing with four curves** (linear with overshoot, S-curve, scatter, stepped) and a sharpness
   knob; morph is CV-controllable.
-- **Glitch FX**: a trigger-driven beat repeat (stutter, reverse, octave, ratchet, tape stop, random pitch)
-  instead of the ring modulator.
+- **FX bus** with distortion, compressor, delay, **glitch** (a trigger-driven beat repeat: stutter,
+  reverse, octave, ratchet, tape stop, random pitch) and the **ring modulator** (six carriers, AM bias,
+  stereo spread, random carrier per hit).
+- **Kit banks**: up to 100 banks of 128 kits on the card, loaded and saved from the LOAD/SAVE button; the
+  last bank comes back at power-on.
+- **Cleaner output**: the mix is summed in floating point, followed by a soft limiter and 24-bit DACs.
 - **Firmware update from the menu** — no power cycling, the bootloader stays as a fallback.
 - **Screensaver** with live channel level meters, CPU load display.
-- **Factory bank 0.5**: 128 kits grouped by engine family (MD-style, Plaits, IDM, hybrids), mixed and
-  levelled against the kick, every kit in a key.
+- **Five banks, 640 kits**: 00 factory (MD-style, Plaits, IDM, hybrids), 01 techno, 02 electro,
+  03 psytrance, 04 industrial. Mixed and levelled against the kick, every kit in a key.
 
 Documentation: **[manual](docs/MANUAL.md)** · [changelog](CHANGELOG.md)
 
@@ -33,21 +38,21 @@ Get the files from the [Releases](../../releases) page:
 | File | What it is |
 |---|---|
 | `LXRE_SHARD_V<version>.img` | firmware update file |
-| `shard_bank_v<version>.zip` | factory bank: the `shard` folder for the SD card, `BANK.txt` (list of kits) and audio demos |
+| `shard_banks_v<version>.zip` | kit banks 00–04: the `shard` folder for the SD card and the kit lists `BANK_00` … `BANK_04` |
 | `SHARD_quickref_v<version>.pdf` | one-page quick reference |
 
 ## Installing
 
 ### First installation (from the original firmware)
 
-1. Copy `LXRE_SHARD_V0.4.img` to the root folder of a FAT32 SD card. Delete any other `LXRE*.img` files
+1. Copy `LXRE_SHARD_V0.5.img` to the root folder of a FAT32 SD card. Delete any other `LXRE*.img` files
    from the card.
-2. Unzip `shard_bank_v0.5.zip` and copy its `shard` folder to the root of the same card.
+2. Unzip `shard_banks_v0.5.zip` and copy its `shard` folder to the root of the same card.
 3. With the module powered off, insert the card, hold down the encoder button and power on. Keep holding
    until "LXR Updater" appears.
-4. Wait for "Update OK!". The module restarts; the start-up screen shows `SHARD v0.4` / `custom LXR fw`.
+4. Wait for "Update OK!". The module restarts; the start-up screen shows `SHARD v0.5` / `custom LXR fw`.
 
-SHARD keeps its kits, projects and settings in the `/shard` folder of the card. The original LXR kits
+SHARD keeps its kit banks and settings in the `/shard` folder of the card. The original LXR kits
 on the card are not touched.
 
 ### Updating SHARD
@@ -94,10 +99,10 @@ The update file is written to `build/release/LXRE_SHARD_V<version>.img`. The SHA
 
 To start from scratch (e.g. after switching compilers), delete the `build/` folder.
 
-### Desktop renderer and factory bank
+### Desktop renderer and kit banks
 
 The engines, channel strip and FX also build for the desktop, which renders WAV files and generates the
-factory bank:
+kit banks:
 
 ```sh
 cmake -S tools/host -B build/host && cmake --build build/host
@@ -105,8 +110,10 @@ build/host/shard_render out/                                  # a WAV per engine
 python3 tools/kits/make_kits.py build/host/shard_render out/  # factory bank -> out/shard/prj00/
 ```
 
-`make_kits.py` needs `numpy` and `scipy`; `tools/kits/bank_txt.py <out dir>` then writes the kit list
-`BANK.txt`. The quick reference PDF is made by `tools/docs/make_quickref.py` (needs `reportlab`).
+`make_techno.py`, `make_electro.py`, `make_psy.py` and `make_industrial.py` take the same arguments and
+write banks 01–04. The generators need `numpy` and `scipy`; `tools/kits/bank_txt.py <out dir>` then
+writes the kit list. The quick reference PDF is made by `tools/docs/make_quickref.py` (needs `reportlab`),
+the diagrams of the manual by `tools/docs/make_diagrams.py`.
 
 ### Programming with a debug probe
 
@@ -139,12 +146,12 @@ prebuilt (`-DLXR_BOOTLOADER_HEX=path/to/LXR_V2_Eurorack_Bootloader.hex`). The bu
 
 | Path | Contents |
 |---|---|
-| `Core/Src/Shard/`, `Core/Inc/Shard/` | SHARD: channel strip, menu glue, morph, CV matrix, update from menu |
+| `Core/Src/Shard/`, `Core/Inc/Shard/` | SHARD: channel strip, menu glue, morph, CV matrix, banks, update from menu |
 | `Core/Src/Shard/engines/` | sound engines (C++) and the engine registry |
 | `Core/ThirdParty/` | subset of Mutable Instruments Plaits and stmlib (MIT) |
 | `Core/Src/`, `Core/Inc/` | original LXR firmware: UI, presets, FX bus, MIDI, I/O |
 | `tools/host/` | desktop build and WAV renderer |
-| `tools/kits/` | factory bank generator, analysis and kit list |
+| `tools/kits/` | bank generators, analysis and kit lists |
 | `tools/docs/` | quick reference PDF generator |
 | `docs/` | manuals |
 

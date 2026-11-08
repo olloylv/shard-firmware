@@ -73,7 +73,7 @@ RATE = 44140
 FILTER = {"off": 0, "lp": 1, "hp": 2, "bp": 3, "ubp": 4, "notch": 5, "peak": 6, "lp2": 7}
 OUTS = {"st1": 0, "st2": 1, "l1": 2, "r1": 3, "l2": 4, "r2": 5, "fx": 6}
 LFO = {"sin": 0, "tri": 1, "sup": 2, "sdn": 3, "sqr": 4, "rnd": 5, "xup": 6, "xdn": 7}
-FX = {"off": 0, "drv": 1, "glt": 2, "cmp": 3, "del": 4}
+FX = {"off": 0, "drv": 1, "glt": 2, "cmp": 3, "del": 4, "rng": 5}
 
 FAMILY = {
     "MD": {"tBD", "tSD", "tCP", "tHH", "EFM", "GND"},
@@ -90,11 +90,19 @@ VOCT = 0xFF
 GLOBAL = {"mrp": 1, "mtg": 2, "msh": 3, "fwt": 4, "fx1": 5, "fx2": 6, "fx3": 7, "fx4": 8}
 
 
+MXB = T.get("mod_ext_base", MCB + 6 * MTPC)
+MXPC = T.get("mod_ext_per_ch", 0)
+MX = T.get("mod_ext_local", [])
+
+
 def mod_dest(ch, local=None, engine_slot=None, voct=False):
     if voct:
         t = MT.index(VOCT)
     elif engine_slot is not None:
         t = MT.index(L["E0"] + engine_slot)
+    elif L[local] in MX:
+        # targets added in 0.5 (ring), numbered after all older channel targets
+        return MXB + ch * MXPC + MX.index(L[local])
     else:
         t = MT.index(L[local])
     return MCB + ch * MTPC + t
@@ -751,6 +759,7 @@ def role_penalty(role, m, alt=None, vol=100):
 # =============================================================================
 POOL_N = {"kick": 42, "perc": 48, "fx": 54, "snare": 42, "clap": 36, "hats": 36}
 POOL_KEEP = 14
+POOL_PER_ARCH = 4
 
 
 def build_pools(seed="shard5"):
@@ -796,7 +805,7 @@ def build_pools(seed="shard5"):
             # keep the best, at most 4 of one archetype
             keep, per_arch = [], {}
             for c, pen, m in scored:
-                if per_arch.get(c.arch, 0) >= 4:
+                if per_arch.get(c.arch, 0) >= POOL_PER_ARCH:
                     continue
                 keep.append((c, pen, m))
                 per_arch[c.arch] = per_arch.get(c.arch, 0) + 1
@@ -1150,7 +1159,8 @@ def fix_kit(kit, path, log):
             if attempt >= 1:
                 # internal modulation can stretch a sound: take it away first
                 before = len(kit.cv)
-                kit.cv = [e for e in kit.cv if not (e[4] >= MCB and (e[4] - MCB) // MTPC == ch)]
+                kit.cv = [e for e in kit.cv if not ((MCB <= e[4] < MXB and (e[4] - MCB) // MTPC == ch)
+                                                or (e[4] >= MXB and (e[4] - MXB) // MXPC == ch))]
                 if len(kit.cv) != before:
                     continue
             shorten(kit.ch[ch], k == 6)
@@ -1165,7 +1175,7 @@ def retune_check(kit, path):
     m = analyse(RENDER, path, with_features=True)
     undone = 0
     for ch, (old, tgt) in kit.tuned.items():
-        f0 = m[ch]["feat"]["f0"]
+        f0 = m[ch]["feat"]["f0"] if "feat" in m[ch] else 0   # silent after retuning: undo
         if f0 <= 0 or abs(hz_to_midi(f0) - tgt) > 0.6:
             kit.ch[ch].set(tune=old, fine=64)
             undone += 1
@@ -1390,4 +1400,5 @@ def main():
     print(f"{len(report)} kits written to {kit_dir}")
 
 
-main()
+if __name__ == "__main__":
+    main()

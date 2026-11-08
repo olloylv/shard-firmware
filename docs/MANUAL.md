@@ -1,6 +1,6 @@
 # SHARD manual
 
-*For firmware 0.4 and factory bank 0.5.*
+*For firmware 0.5 and kit banks 00–04.*
 
 SHARD is an **unofficial** firmware based on the open-source LXR firmware (GPL-3.0). It is not made,
 approved or supported by Erica Synths.
@@ -23,11 +23,11 @@ Channel sub-pages:
 | OSC | **Eng** (engine), Tun (note), Fin (±64 cents), engine parameters 1–5 |
 | MOD / FM / SMP | engine parameters 6–29. Names come from the engine; empty slots can't be selected |
 | AEG | Atk, Dec, Slp, Rep (clap retrigger for any engine), DcA, Vel (velocity → level), Mod (AD / off) |
-| FLT | Frq, Res, Typ (off/LP/HP/BP/UBP/Nch/Pk/LP2), Drv |
+| FLT | Frq, Res, Typ (off/LP/HP/BP/UBP/Nch/Pk/LP2), Drv, then the ring modulator: Rng, RFq, RSr |
 | MIX | Vol, Pan, SR (sample rate), Drv, Out, **Bit** (bit crusher) |
 | LFO | Frq, Ofs, Wav, Rtg (retrigger from channel 1–6) |
 
-Channel signal chain: **engine → filter → AEG → velocity → drive → volume → SR → Bit → pan and
+Channel signal chain: **engine → ring mod → filter → AEG → velocity → drive → volume → SR → Bit → pan and
 output**. Engines with their own envelope (all Plaits drums, tBD/tSD/tCP/tHH, EFM, Zap, Crs) default to
 AEG `Mod = off`, so the engine's internal envelope shapes the sound.
 
@@ -36,12 +36,33 @@ Filter drive also sets the filter's input gain: 0 is about −8 dB, 40 is unity.
 Changing the engine from the panel loads that engine's defaults. Loading a kit keeps the stored
 parameters as they are.
 
+### Ring modulator (channel)
+
+New in 0.5. Every channel has a ring modulator right after the engine (FLT page, slots 5–7):
+
+| Knob | Parameter |
+|---|---|
+| `Rng` | amount: 0 = off, 127 = pure ring modulation; in between the dry signal is mixed in |
+| `RFq` | frequency of the internal carrier, 20 Hz – 5.1 kHz (exponential) |
+| `RSr` | carrier: `sin`, `tri`, `sqr` (internal), or `c1`–`c6`, the output of another channel |
+
+The internal carrier restarts on every hit, so each hit sounds the same. With `c1`–`c6` the channel is
+multiplied by the other channel's final output (after its AEG and volume): it only sounds while the
+other channel sounds, and its envelope shapes this one. A channel rendered after this one is heard one
+audio block late (1.45 ms); choosing the channel itself multiplies it by its own previous block.
+
+Kits from older versions have 0 in these slots, so the ring modulator is off. `Rng` and `RFq` can be
+morphed and are CV matrix destinations (at the end of the list, see below); a CV on `Rng` can open the
+ring even when the knob is at 0.
+
 ### Accent inputs
 
 The accent inputs are read as gates: if an accent input is high when its channel is triggered, the hit
 has full velocity, otherwise half. Accents are also modulation sources (see below).
 
 ### MOD mode (CV matrix)
+
+![CV matrix: sources, 36 slots, destinations](img/cv-matrix.svg)
 
 Each channel has **6 slots** (36 in total): source, amount, destination. Sources: CV1–5, LFO1–6,
 accents 1–6. In MOD mode the encoder steps through the channel's pages: slots 1–2, 3–4, 5–6, then the
@@ -61,7 +82,10 @@ The destination list starts with the global targets:
 | `Fx1`–`Fx4` | parameters P1–P4 of the current effect |
 
 Then come the channel parameters: `VO` (1 V/oct pitch), the engine parameters and the common strip (Atk,
-Dec, Slp, filter Frq/Res/Drv, Vol, Pan, SR, Drv, Bit, LFO rate). On the LCD a destination looks like
+Dec, Slp, filter Frq/Res/Drv, Vol, Pan, SR, Drv, Bit, LFO rate). The ring modulator targets added in 0.5
+(`Rng` amount and `RFq` frequency, LCD `1rn` / `1rf`) come last, after channel 6's parameters, for all
+six channels: that way the numbers of the older destinations, and the kits that use them, stay the
+same. On the LCD a destination looks like
 `3sw`: channel number and short name. While editing, the full name is shown, e.g. `C3 tBD  SweepDec`.
 
 Empty engine slots are skipped while scrolling. If a destination points at a slot the current engine
@@ -134,13 +158,24 @@ The Plaits code is taken from the Mutable Instruments repository (MIT) almost un
 rate was adjusted. The MD-style engines are original code written from the published descriptions of the
 Elektron Machinedrum machines; no Elektron code was used, and SHARD is not affiliated with Elektron.
 
-## FX: glitch instead of ring mod
+## FX bus
 
-The `glt` effect type (where `rng` used to be) is a beat repeat triggered by the hits of channels routed
-to the FX bus (Out = FX). With probability Chance a hit starts an event: the next slice of length Len is
-recorded and played through, then the slice replaces the input and repeats Rep times using one of these
-actions: repeat, reverse, octave down, octave up, ratchet (every repeat half as long), tape stop, random
-pitch steps. Variety 0 allows only repeat; every step up adds the next action.
+![FX bus and output stage](img/fx-path.svg)
+
+Only channels whose MIX page has `Out = FX` reach the effect; the others go straight to their outputs.
+The glitch and the ring modulator react to the hits of those FX channels only.
+
+FX types: `off`, `drv` (distortion), `glt` (glitch), `cmp` (compressor), `del` (delay), `rng` (ring
+modulator, new in 0.5). The type numbers of older kits are unchanged: `glt` stays where the ring
+modulator was in the LXR firmware, `rng` is appended at the end.
+
+### Glitch (`glt`)
+
+A beat repeat triggered by the hits of channels routed to the FX bus (Out = FX). With probability Chance
+a hit starts an event: the next slice of length Len is recorded and played through, then the slice
+replaces the input and repeats Rep times using one of these actions: repeat, reverse, octave down,
+octave up, ratchet (every repeat half as long), tape stop, random pitch steps. Variety 0 allows only
+repeat; every step up adds the next action.
 
 | Knob | Parameter |
 |---|---|
@@ -151,7 +186,50 @@ pitch steps. Variety 0 allows only repeat; every step up adds the next action.
 
 The glitch shares the delay buffer (only one effect runs at a time).
 
-## Factory bank
+### Ring modulator (`rng`)
+
+| Knob | Parameter |
+|---|---|
+| `wav` | carrier: Sin, Tri, Saw, Rec (square), Noi (noise, a new random value every period), PWM (25 % pulse) |
+| `frq` (P1) | carrier frequency 20 Hz – 5.1 kHz |
+| `am` (P2) | 0 = ring modulation, 127 = amplitude modulation (the dry signal comes through) |
+| `spr` (P3) | the right carrier is detuned up to +1 semitone: stereo beating |
+| `rnd` (P4) | on every hit of an FX bus channel the carrier jumps by up to ±2 octaves around `frq` |
+
+The carrier restarts on every hit of an FX bus channel. P1–P4 and dry/wet can be modulated from the CV
+matrix (`Fx1`–`Fx4`, `Fwt`) and follow the morph.
+
+## Kit banks
+
+New in 0.5. The card holds up to 100 banks of 128 kits, `/shard/prj00` … `/shard/prj99`. One bank is in
+RAM at a time. The LOAD/SAVE button steps through:
+
+**Load Kit → Save Kit → Save Morph → Load Bank → Save Bank** (and back to Load Kit).
+
+- **Load Bank** shows `Bank` and the bank number with its name (from `prj.nfo`, `Empty` if there is
+  none). Loading reads all 128 kits from the card (progress on the LCD) and then activates the kit
+  slot that was playing.
+- **Save Bank** writes all 128 kits in RAM and the name to the selected bank, which becomes the current
+  one. Use it to copy a bank or to save your edits of several kits at once.
+- The current bank is stored in `/shard/bank.idx` and comes back at power-on. Global settings always
+  stay in `/shard/prj00/glo.cfg`.
+- Kit load/save works inside the current bank as before.
+
+Banks shipped with 0.5:
+
+| Bank | Name | Contents | Channel roles (1–6, T7) |
+|---|---|---|---|
+| 00 | `SHARD05` | factory bank 0.5 (MD / PL / ID / HY groups) | kick, perc/tom, FX, snare, clap, closed hat, open hat |
+| 01 | `TECHNO` | techno with rumble, atmosphere and pumping kicks | kick, rumble, atmosphere, rim/snare, clap, closed hat, open hat |
+| 02 | `ELECTRO` | hard Detroit electro, 808-style kicks | kick, perc (cowbells, toms, blips), FX (zaps, lasers), snare, clap, closed hat, open hat |
+| 03 | `PSY` | dark / forest psytrance, rolling bass | kick, rolling bass, psychedelic FX, rim, clap, closed hat, dark open hat |
+| 04 | `INDSTRL` | hard industrial | overdriven kick, rumble, metal/noise, snare, clap, closed hat, open hat |
+
+The text lists `BANK_00` … `BANK_04` in the release describe every kit (engines, FX, key, tempo and
+character). In banks 01–04 "pump" means the rumble/bass/atmosphere ducks on every kick (its LFO is
+retriggered by channel 1).
+
+### Bank 00 (factory bank)
 
 The factory bank 0.5 has 128 kits, grouped by the engine family that dominates the kit (at least 4 of
 6 channels):
@@ -169,17 +247,19 @@ factory bank.
 Channel roles are the same in every kit: 1 kick, 2 percussion/tom, 3 FX (metal, zaps, glitch),
 4 snare, 5 clap, 6 closed hat, T7 = open hat on channel 6.
 
-### Installing the bank
+### Installing the banks
 
-1. Unzip `shard_bank_v0.5.zip`.
+1. Unzip `shard_banks_v0.5.zip`.
 2. Copy the `shard` folder to the root of the SD card. If the card already has a `shard` folder, the
-   kits in `shard/prj00` are replaced; back up your own kits first.
-3. Load kits as usual (LOAD). The `demo/` folder in the zip contains a short audio demo of every fourth
-   kit; it doesn't go on the card.
+   kits in `shard/prj00` … `shard/prj04` are replaced; back up your own banks first (or move them to
+   other numbers, `prj05` and up).
+3. Load a bank with **Load Bank**, then kits as usual (LOAD).
 
-### How the bank is built
+### How the banks are built
 
-`tools/kits/make_kits.py` generates the bank:
+`tools/kits/make_kits.py` generates bank 00; `make_techno.py` (01), `make_electro.py` (02),
+`make_psy.py` (03) and `make_industrial.py` (04) build on it and on `bank_common.py`. `bank_txt.py`
+writes the kit lists. For bank 00:
 
 1. **Voice pools.** Every group and role has a set of archetypes with parameters in seconds, semitones
    and hertz, converted to engine values. Each archetype is rendered many times with random variations
@@ -207,10 +287,13 @@ cmake -S tools/host -B build/host && cmake --build build/host
 python3 tools/kits/make_kits.py build/host/shard_render out/   # out/shard/prj00/*.snd -> SD card root
 ```
 
+The other generators take the same two arguments and write `out/shard/prj01` … `prj04`.
+
 ## SD card
 
-SHARD keeps its kits, projects and global settings in a separate `/shard` folder, apart from the LXR
-kits. An empty slot gets a SHARD init kit.
+SHARD keeps its kits, banks and global settings in a separate `/shard` folder, apart from the LXR
+kits: banks in `/shard/prj00` … `/shard/prj99`, the current bank number in `/shard/bank.idx`, global
+settings in `/shard/prj00/glo.cfg`. An empty slot gets a SHARD init kit.
 
 The kit format version is stored in parameter 0 (`SH_KIT_VERSION`).
 
@@ -230,7 +313,7 @@ before the copy starts, the firmware shows an error and keeps running.
 **Fallback:** as in the original firmware. Hold the encoder at power-on until "LXR Updater" appears; the
 bootloader flashes the `LXRE*.img` file itself. This also works if power was lost during a menu update.
 
-Limit: the firmware image can be up to 480 KB. The 0.4 image is about 290 KB.
+Limit: the firmware image can be up to 480 KB. The 0.5 image is about 300 KB.
 
 ## Screensaver
 
@@ -239,8 +322,13 @@ shows six vertical level meters for the channels across both LCD lines; the grou
 to avoid burn-in. Any button, the encoder, or turning a knob by 2+ steps brings the menu back; a single
 step (jitter of an endless pot) doesn't reset the timer.
 
-`idl` on the global page shows the idle time in seconds and the last input that reset it (b = button,
-p = pot, e = encoder, plus its number). Useful if the screensaver never starts.
+## Output stage
+
+New in 0.5. The channels and the FX return are summed in floating point (no 16-bit clipping inside the
+mix), then a soft limiter (transparent up to about −1 dBFS, a tanh shoulder above) and the two DACs run
+with 24-bit samples instead of 16. The sample rate stays 44.1 kHz: the engines and the CPU budget are
+built around it. Loud kits that used to clip hard now saturate softly; quiet passages have a lower
+noise floor.
 
 ## CPU load
 
@@ -264,16 +352,19 @@ The firmware needs the Arm GNU Toolchain with C++ (`arm-none-eabi-g++`); Arm's o
 | Path | Contents |
 |---|---|
 | `Core/Inc/Shard/sh_params.h` | channel parameter layout |
-| `Core/Src/Shard/sh_channel.c` | channel strip (filter, AEG, drive, SR, Bit, LFO, modulation, morph) |
+| `Core/Src/Shard/sh_channel.c` | channel strip (ring mod, filter, AEG, drive, SR, Bit, LFO, modulation, morph) |
 | `Core/Src/Shard/sh_bridge.c` | glue to the menu, kits, CV matrix, CPU meter |
 | `Core/Src/Shard/sh_ui.c` | parameter names and values for the LCD |
 | `Core/Src/Shard/sh_morph.c` | morph curves (lin/snp/sct/stp) |
 | `Core/Src/Shard/sh_update.c` | update from the menu |
 | `Core/Src/Shard/engines/` | engines (C++) and the registry |
+| `Core/Src/Shard/sh_bank.c` | kit banks |
+| `Core/Src/Soundengine/DSPAudio/mixer.c` | float mix bus, soft limiter, 24-bit output |
 | `Core/Src/Soundengine/DSPAudio/FX/Glitch.c` | glitch effect |
+| `Core/Src/Soundengine/DSPAudio/FX/Ringmod.c` | ring modulator effect |
 | `Core/ThirdParty/` | subset of Plaits and stmlib (MIT) |
 | `tools/host/` | desktop build of the engines and WAV renderer |
-| `tools/kits/` | factory bank generator and single-hit analysis |
+| `tools/kits/` | bank generators, single-hit analysis and kit lists |
 
 To add an engine:
 

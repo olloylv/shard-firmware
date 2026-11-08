@@ -282,6 +282,10 @@ enum NamesEnum
 	TEXT_FX_GCHANCE,
 	TEXT_FX_GVAR,
 	TEXT_FX_GREP,
+	TEXT_FX_RFREQ,		/* SHARD 0.5: ring FX */
+	TEXT_FX_RAM,
+	TEXT_FX_RSPREAD,
+	TEXT_FX_RRND,
 
 	NUM_NAMES
 };
@@ -399,6 +403,10 @@ enum shortNamesEnum
 	SHORT_GCHANCE,
 	SHORT_GVAR,
 	SHORT_GREP,
+	SHORT_RFREQ,
+	SHORT_RAM,
+	SHORT_RSPREAD,
+	SHORT_RRND,
 
 	
 };
@@ -536,7 +544,11 @@ enum longNamesEnum
 	LONG_GLEN,
 	LONG_GCHANCE,
 	LONG_GVAR,
-	LONG_GREP
+	LONG_GREP,
+	LONG_RFREQ,
+	LONG_RAM,
+	LONG_RSPREAD,
+	LONG_RRND
 	
 };
 
@@ -547,6 +559,7 @@ enum loadSaveEnum
 	//SAVE_TYPE_PATTERN,
 	//SAVE_TYPE_SONG,
 	SAVE_TYPE_MORPH,
+	SAVE_TYPE_BANK,		// SHARD: kit bank /shard/prjNN, see Shard/sh_bank.h
 
 	//SAVE_TYPE_PROJECT,	// kit data, pattern data and BPM
 	//SAVE_TYPE_ALL,			// all global settings, kit data and pattern data

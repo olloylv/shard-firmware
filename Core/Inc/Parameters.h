@@ -187,7 +187,6 @@ enum ParamEnums
 	PAR_SH_CPU,						// SHARD: audio CPU load display
 	PAR_SH_MORPH_ALG,				// SHARD: morph algorithm (sh_morph.h)
 	PAR_SH_MORPH_SHP,				// SHARD: morph sharpness
-	PAR_SH_IDLE,					// SHARD: screensaver diagnostics (time since last touch)
 	PAR_BEGINNING_OF_GLOBALS, //a placeholder to mark the beginning of the global var space not present in morph and not needed in the seq
 	//global params
 	PAR_BPM = PAR_BEGINNING_OF_GLOBALS,	/*250*/

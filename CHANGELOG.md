@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.5 — 2026-11-08
+
+Firmware:
+
+- **Kit banks.** Up to 100 banks of 128 kits on the card (`/shard/prj00` … `prj99`, name in `prj.nfo`).
+  The LOAD/SAVE button now steps Load Kit → Save Kit → Save Morph → Load Bank → Save Bank. The current
+  bank is kept in `/shard/bank.idx` and restored at power-on; global settings stay in
+  `/shard/prj00/glo.cfg`.
+- **Ring modulator per channel**, right after the engine (FLT page): `Rng` amount, `RFq` 20 Hz – 5.1 kHz,
+  `RSr` carrier sine/triangle/square or the output of channel 1–6. Uses the three free slots of the
+  channel block, so kits of older versions load with the ring off.
+- **Ring modulator in the CV matrix**: amount and frequency of every channel are new destinations
+  (`1rn`, `1rf` …), appended after all existing ones, so older destination numbers and kits are unchanged.
+  A CV on the amount opens the ring even when the knob is at 0.
+- **Ring modulator FX** is back as FX type `rng`, appended after `del` (glitch keeps its number): carrier
+  Sin/Tri/Saw/Rec/Noise/PWM, frequency, AM bias, stereo spread, random carrier jump per hit.
+- **Output stage**: channels and FX return are summed in floating point instead of saturating 16-bit
+  integers, a soft limiter (transparent up to about −1 dBFS, tanh shoulder above) replaces hard clipping,
+  and the DACs get 24-bit samples. Sample rate unchanged (44.1 kHz).
+- **Compressor FX** is much lighter: the gain computer runs in float with fast log/exp approximations
+  instead of `logf`/`expf` with double math per sample. Same sound (difference below −80 dB). Heavy kits
+  (Modal, Particles) with the compressor no longer overload the CPU.
+- MOD pages: the scroll marks (`<`, `>`, `*`) now follow the pages of the selected channel (they read
+  the global page table before).
+- Removed the `idl` screensaver diagnostics from the global page.
+
+Banks (5 × 128 = 640 kits, every kit in a key, levelled against the kick):
+
+- 00 `SHARD05` — factory bank 0.5 (unchanged): MD-style, Plaits, IDM, hybrids.
+- 01 `TECHNO` — kick, rumble, atmosphere, rim/snare, clap, hats; rumble and atmosphere pump with the kick.
+- 02 `ELECTRO` — hard Detroit electro: 808-style kicks, cowbells/toms/blips, zaps and lasers.
+- 03 `PSY` — dark / forest psytrance: rolling bass with growl between the kicks, psychedelic FX.
+- 04 `INDSTRL` — hard industrial: overdriven kicks, rumble, metal and noise.
+
+Documentation:
+
+- Manual: kit banks, ring modulator (channel and FX), output stage, diagrams of the CV matrix and of the
+  FX bus / output path.
+- Quick reference updated for 0.5.
+
+Tools:
+
+- `make_techno.py`, `make_electro.py`, `make_psy.py`, `make_industrial.py` and the shared
+  `bank_common.py` build banks 01–04 on top of `make_kits.py`; `bank_txt.py` lists the tempo of every kit.
+- The desktop renderer mirrors the float mix bus and the limiter (its `clip` metric counts samples that
+  would have hit the 16-bit limit), plays event lists (`.ev`: time, channel, velocity, alt) and knows the
+  ring modulator parameters.
+- `tools/docs/make_diagrams.py` draws the manual's diagrams.
+
 ## Factory bank 0.5 — 2026-11-01
 
 - All 128 kits rebuilt. Voices are picked from scored pools: every candidate is rendered and measured as

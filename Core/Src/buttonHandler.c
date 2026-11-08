@@ -29,6 +29,9 @@
 #include "Soundengine/MIDI/MidiVoiceControl.h"
 #include <Soundengine/TriggerProcessor.h>
 
+//SHARD: the LOAD/SAVE button cycles load kit, save kit, save morph, load bank, save bank
+static uint8_t buttonHandler_bankMode = 0;
+
 //used to remember the last active page when entering the sequencer mode
 //needed to return to the previously shown page when seq mode button is released
 //static uint8_t lastActivePage = 0;
@@ -325,12 +328,18 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 
 	if(mode==SELECT_MODE_LOAD)
 	{
-		//Load kit, Save kit, Save Morph
-		switch(buttonHandler_stateMemory.selectButtonMode)
+		//Load kit, Save kit, Save Morph, SHARD: Load bank, Save bank
+		const uint8_t cur = buttonHandler_stateMemory.selectButtonMode;
+		switch(cur)
 		{
 		default:
+			mode = SELECT_MODE_LOAD;
+			buttonHandler_bankMode = 0;
+			break;
+
 		case SELECT_MODE_SAVE_MORPH:
 			mode = SELECT_MODE_LOAD;
+			buttonHandler_bankMode = 1;
 			break;
 
 		case SELECT_MODE_LOAD:
@@ -338,7 +347,13 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 			break;
 
 		case SELECT_MODE_SAVE:
-			mode = SELECT_MODE_SAVE_MORPH;
+			if(buttonHandler_bankMode)
+			{
+				mode = SELECT_MODE_LOAD;
+				buttonHandler_bankMode = 0;
+			}
+			else
+				mode = SELECT_MODE_SAVE_MORPH;
 			break;
 		}
 
@@ -431,7 +446,7 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 				led_clearAllBlinkLeds();
 				led_setMode2(buttonHandler_stateMemory.selectButtonMode);
 
-				menu_setLoadSaveCategory(SAVE_TYPE_KIT);
+				menu_setLoadSaveCategory(buttonHandler_bankMode ? SAVE_TYPE_BANK : SAVE_TYPE_KIT);
 				//update the status LED
 			//	led_setMode2(2);
 
@@ -454,7 +469,7 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 				led_clearAllBlinkLeds();
 				led_setMode2(buttonHandler_stateMemory.selectButtonMode);
 
-				menu_setLoadSaveCategory(SAVE_TYPE_KIT);
+				menu_setLoadSaveCategory(buttonHandler_bankMode ? SAVE_TYPE_BANK : SAVE_TYPE_KIT);
 				//update the status LED
 			//	led_setMode2(2);
 

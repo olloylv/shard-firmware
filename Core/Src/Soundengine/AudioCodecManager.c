@@ -14,8 +14,9 @@
 #include "Soundengine/datatypes.h"
 //------------------------------------------------------------------
 #if DMA_MODE_ACTIVE
-INDTCMZ int16_t dma_buffer[OUTPUT_DMA_SIZE*4];
-INDTCMZ int16_t dma_buffer2[OUTPUT_DMA_SIZE*4];
+//SHARD: one element per sample (24 bit: two DMA half words), two blocks per buffer
+INDTCMZ sh_dma_t dma_buffer[OUTPUT_DMA_SIZE*4];
+INDTCMZ sh_dma_t dma_buffer2[OUTPUT_DMA_SIZE*4];
 #endif
 
 volatile INDTCMZ uint8_t bCurrentSampleValid = 0;
@@ -23,7 +24,6 @@ volatile INDTCMZ uint8_t bCurrentSampleValid = 0;
 //------------------------------------------------------------------
 int CodecInit()
 {
-    dma_buffer[0] = 32756;
     codec_initCsCodec((uint32_t)dma_buffer, OUTPUT_DMA_SIZE*2,(uint32_t)dma_buffer2, OUTPUT_DMA_SIZE*2);
     return 0;
 }

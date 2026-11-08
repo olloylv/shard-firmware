@@ -30,6 +30,7 @@ void FxBus_init()
 	Glitch_init(&fxBus.glitch);
 	Compressor_init(&fxBus.compressor);
 	Delay_init(&fxBus.delay);
+	Ringmod_init(&fxBus.ringmod);
 
 
 
@@ -124,6 +125,10 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 			Delay_processPingPong(&fxBus.delay, fxBuffer, out, out2, size, channels, fxBus.dryWet);
 		}
 		break;
+
+	case FX_RING:
+		Ringmod_process(&fxBus.ringmod, fxBuffer, out, out2, size, channels, fxBus.dryWet);
+		break;
 #if USE_REVERB
 	case FX_REVERB:
 		Reverb_process(&fxBus.reverb, fxBuffer, out, out2, size, channels, fxBus.dryWet);
@@ -137,6 +142,7 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 void FxBus_onTrigger(void)
 {
 	if(fxBus.fxType == FX_GLITCH) Glitch_trigger(&fxBus.glitch);
+	else if(fxBus.fxType == FX_RING) Ringmod_trigger(&fxBus.ringmod);
 }
 
 void FxBus_prepareFxChange()
@@ -178,6 +184,10 @@ IN_ITCM_RAM void FxBus_updateParameter()
 		Delay_setFilter(&fxBus.delay, fxBus.parameter[2]);
 		Delay_setFeedback(&fxBus.delay, fxBus.parameter[3]);
 
+		break;
+
+	case FX_RING:
+		Ringmod_setParams(&fxBus.ringmod, fxBus.parameter[0], fxBus.parameter[1], fxBus.parameter[2], fxBus.parameter[3]);
 		break;
 #if USE_REVERB
 	case FX_REVERB:

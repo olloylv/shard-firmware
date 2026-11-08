@@ -167,12 +167,13 @@ const char ratioNames[][4] =
 //-----------------------------------------------------------------
 const char fxNames[][4] =
 {
-	{5},		//number of entries
+	{6},		//number of entries
 	{"off"},
 	{"drv"},
 	{"glt"},
 	{"cmp"},
 	{"del"},
+	{"rng"},
 	//{"rev"}
 };
 //-----------------------------------------------------------------
@@ -527,6 +528,10 @@ const char shortNames[][4]  =
 	{"chc"},
 	{"var"},
 	{"rep"},
+	{"frq"},
+	{"am "},
+	{"spr"},
+	{"rnd"},
 
 };
 //-----------------------------------------------------------------
@@ -666,6 +671,10 @@ const char longNames[][16] =
 	{"Chance"},
 	{"Variety"},
 	{"Repeats"},
+	{"RingFreq"},
+	{"AM Bias"},
+	{"Spread"},
+	{"RandFreq"},
 };
 
 
