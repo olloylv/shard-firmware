@@ -12,7 +12,7 @@ import os
 import sys
 
 OUT = sys.argv[1]
-FW = sys.argv[2] if len(sys.argv) > 2 else "0.4"
+FW = sys.argv[2] if len(sys.argv) > 2 else "0.5"
 BANK = sys.argv[3] if len(sys.argv) > 3 else "0.5"
 TITLE = sys.argv[4] if len(sys.argv) > 4 else "factory bank"
 NAME = sys.argv[5] if len(sys.argv) > 5 else "BANK.txt"

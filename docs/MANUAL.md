@@ -62,6 +62,8 @@ has full velocity, otherwise half. Accents are also modulation sources (see belo
 
 ### MOD mode (CV matrix)
 
+![CV matrix: sources, 36 slots, destinations](img/cv-matrix.svg)
+
 Each channel has **6 slots** (36 in total): source, amount, destination. Sources: CV1–5, LFO1–6,
 accents 1–6. In MOD mode the encoder steps through the channel's pages: slots 1–2, 3–4, 5–6, then the
 channel's LFO. In a new kit slots 1–5 already listen to CV1–CV5 and slot 6 to the channel's own LFO;
@@ -157,6 +159,11 @@ rate was adjusted. The MD-style engines are original code written from the publi
 Elektron Machinedrum machines; no Elektron code was used, and SHARD is not affiliated with Elektron.
 
 ## FX bus
+
+![FX bus and output stage](img/fx-path.svg)
+
+Only channels whose MIX page has `Out = FX` reach the effect; the others go straight to their outputs.
+The glitch and the ring modulator react to the hits of those FX channels only.
 
 FX types: `off`, `drv` (distortion), `glt` (glitch), `cmp` (compressor), `del` (delay), `rng` (ring
 modulator, new in 0.5). The type numbers of older kits are unchanged: `glt` stays where the ring

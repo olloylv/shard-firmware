@@ -112,7 +112,8 @@ python3 tools/kits/make_kits.py build/host/shard_render out/  # factory bank -> 
 
 `make_techno.py`, `make_electro.py`, `make_psy.py` and `make_industrial.py` take the same arguments and
 write banks 01–04. The generators need `numpy` and `scipy`; `tools/kits/bank_txt.py <out dir>` then
-writes the kit list. The quick reference PDF is made by `tools/docs/make_quickref.py` (needs `reportlab`).
+writes the kit list. The quick reference PDF is made by `tools/docs/make_quickref.py` (needs `reportlab`),
+the diagrams of the manual by `tools/docs/make_diagrams.py`.
 
 ### Programming with a debug probe
 
