@@ -364,7 +364,7 @@ The firmware needs the Arm GNU Toolchain with C++ (`arm-none-eabi-g++`); Arm's o
 | `Core/Src/Soundengine/DSPAudio/FX/Ringmod.c` | ring modulator effect |
 | `Core/ThirdParty/` | subset of Plaits and stmlib (MIT) |
 | `tools/host/` | desktop build of the engines and WAV renderer |
-| `tools/kits/` | factory bank generator and single-hit analysis |
+| `tools/kits/` | bank generators, single-hit analysis and kit lists |
 
 To add an engine:
 
